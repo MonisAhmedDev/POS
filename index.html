@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FastBite — Fast Food Shop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- FOOD STICKER BACKGROUND -->
+  <div class="food-bg" aria-hidden="true">
+    <span style="top:4%;left:3%;font-size:3.2rem;transform:rotate(-15deg);opacity:.13">🍔</span>
+    <span style="top:12%;left:88%;font-size:2.5rem;transform:rotate(20deg);opacity:.1">🍕</span>
+    <span style="top:25%;left:6%;font-size:2rem;transform:rotate(10deg);opacity:.09">🍟</span>
+    <span style="top:7%;left:50%;font-size:3.5rem;transform:rotate(-8deg);opacity:.08">🍗</span>
+    <span style="top:35%;left:92%;font-size:2.8rem;transform:rotate(25deg);opacity:.11">🥤</span>
+    <span style="top:50%;left:2%;font-size:3rem;transform:rotate(-20deg);opacity:.1">🍕</span>
+    <span style="top:60%;left:82%;font-size:2.2rem;transform:rotate(12deg);opacity:.09">🍔</span>
+    <span style="top:70%;left:16%;font-size:2.6rem;transform:rotate(-5deg);opacity:.1">🎂</span>
+    <span style="top:78%;left:70%;font-size:3rem;transform:rotate(18deg);opacity:.09">🍟</span>
+    <span style="top:88%;left:5%;font-size:2.4rem;transform:rotate(8deg);opacity:.11">🥛</span>
+    <span style="top:92%;left:55%;font-size:2.8rem;transform:rotate(-12deg);opacity:.08">🍗</span>
+    <span style="top:42%;left:46%;font-size:2rem;transform:rotate(30deg);opacity:.07">🧅</span>
+    <span style="top:20%;left:35%;font-size:1.8rem;transform:rotate(-22deg);opacity:.07">🍊</span>
+    <span style="top:65%;left:40%;font-size:2.2rem;transform:rotate(15deg);opacity:.08">🎂</span>
+    <span style="top:3%;left:72%;font-size:2rem;transform:rotate(-10deg);opacity:.09">🌮</span>
+    <span style="top:55%;left:58%;font-size:1.6rem;transform:rotate(5deg);opacity:.07">🍰</span>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast-container"></div>
+
+  <!-- MODAL -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box">
+      <div id="modal-header">
+        <h3 id="modal-title"></h3>
+        <button id="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ========== AUTH PAGE ========== -->
+  <div id="page-auth" class="page active">
+    <div class="auth-container">
+      <div class="auth-left">
+        <div class="auth-brand">
+          <div class="auth-logo-icon">🍔</div>
+          <h1>FastBite</h1>
+          <p>Premium Fast Food Management</p>
+        </div>
+        <div class="auth-features">
+          <div class="auth-feat"><i class="fas fa-utensils"></i><span>Fresh &amp; Tasty Menu</span></div>
+          <div class="auth-feat"><i class="fas fa-bolt"></i><span>Lightning Fast Service</span></div>
+          <div class="auth-feat"><i class="fas fa-star"></i><span>Top Rated Experience</span></div>
+          <div class="auth-feat"><i class="fas fa-shield-alt"></i><span>Secure &amp; Reliable</span></div>
+        </div>
+      </div>
+      <div class="auth-right">
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <button class="auth-tab active" id="tab-login" onclick="showLogin()">Login</button>
+            <button class="auth-tab" id="tab-signup" onclick="showSignup()">Sign Up</button>
+          </div>
+
+          <!-- LOGIN FORM -->
+          <form id="form-login" onsubmit="doLogin(event)">
+            <div class="form-group">
+              <label>Email Address</label>
+              <div class="inp-wrap">
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="login-email" placeholder="your@email.com" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <div class="inp-wrap">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="login-password" placeholder="••••••••" required>
+                <button type="button" class="eye-btn" onclick="togglePwd('login-password',this)"><i
+                    class="fas fa-eye"></i></button>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary btn-full"><i class="fas fa-sign-in-alt"></i> Login</button>
+            <p class="auth-hint">Admin demo: admin@fastfood.com / admin123</p>
+          </form>
+
+          <!-- SIGNUP FORM -->
+          <form id="form-signup" class="hidden" onsubmit="doSignup(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Full Name</label>
+                <div class="inp-wrap">
+                  <i class="fas fa-user"></i>
+                  <input type="text" id="su-name" placeholder="John Doe" required>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Email Address</label>
+              <div class="inp-wrap">
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="su-email" placeholder="your@email.com" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <div class="inp-wrap">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="su-pass" placeholder="Min. 6 characters" required minlength="6">
+                <button type="button" class="eye-btn" onclick="togglePwd('su-pass',this)"><i
+                    class="fas fa-eye"></i></button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirm Password</label>
+              <div class="inp-wrap">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="su-confirm" placeholder="Repeat password" required>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary btn-full"><i class="fas fa-user-plus"></i> Create Account</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== ADMIN PAGE ========== -->
+  <div id="page-admin" class="page hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="sb-icon">🍔</span>
+        <span class="sb-name">FastBite</span>
+        <span class="sb-tag">Admin</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" id="nav-dashboard" onclick="adminNav('dashboard')"><i class="fas fa-chart-line"></i>
+          Dashboard</a>
+        <a class="nav-item" id="nav-menu" onclick="adminNav('menu')"><i class="fas fa-utensils"></i> Menu Items</a>
+        <a class="nav-item" id="nav-orders" onclick="adminNav('orders')"><i class="fas fa-shopping-bag"></i> Orders</a>
+        <a class="nav-item" id="nav-customers" onclick="adminNav('customers')"><i class="fas fa-users"></i>
+          Customers</a>
+        <a class="nav-item" id="nav-feedback" onclick="adminNav('feedback')"><i class="fas fa-comments"></i>
+          Feedback</a>
+        <a class="nav-item" id="nav-settings" onclick="adminNav('settings')"><i class="fas fa-cog"></i> Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sf-user" onclick="showEditMyAdminProfile()" title="Edit profile" style="cursor:pointer;flex:1">
+          <div class="avatar" id="admin-avatar">A</div>
+          <div>
+            <div class="sf-name" id="admin-name">Admin</div>
+            <div class="sf-role" style="color:var(--yellow);font-size:.7rem"><i class="fas fa-pen"
+                style="margin-right:3px"></i>Edit Profile</div>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="doLogout()" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="admin-sec active">
+        <div class="sec-header">
+          <div>
+            <h2>Dashboard</h2>
+            <p>Welcome back! Here's today's overview.</p>
+          </div>
+        </div>
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="dash-bottom">
+          <div class="dash-card">
+            <h3><i class="fas fa-clock"></i> Recent Orders</h3>
+            <div id="recent-orders"></div>
+          </div>
+          <div class="dash-card">
+            <h3><i class="fas fa-fire"></i> Top Selling Items</h3>
+            <div id="top-items"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MENU MANAGEMENT -->
+      <section id="sec-menu" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Menu Items</h2>
+            <p>Add, edit or remove food items from your menu.</p>
+          </div>
+          <button class="btn-primary" onclick="showAddItem()"><i class="fas fa-plus"></i> Add Item</button>
+        </div>
+        <div class="filter-bar">
+          <div class="inp-wrap search-inp">
+            <i class="fas fa-search"></i>
+            <input type="text" id="menu-search" placeholder="Search menu..." oninput="renderAdminMenu()">
+          </div>
+          <select id="menu-cat-filter" onchange="renderAdminMenu()" class="filter-select">
+            <option value="">All Categories</option>
+            <option value="Burgers">🍔 Burgers</option>
+            <option value="Pizzas">🍕 Pizzas</option>
+            <option value="Sides">🍟 Sides</option>
+            <option value="Desserts">🍰 Desserts</option>
+            <option value="Drinks">🥤 Drinks</option>
+          </select>
+        </div>
+        <div class="menu-grid" id="admin-menu-grid"></div>
+      </section>
+
+      <!-- ORDERS -->
+      <section id="sec-orders" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Order History</h2>
+            <p>View and manage all customer orders.</p>
+          </div>
+          <select id="order-filter" onchange="renderOrders()" class="filter-select">
+            <option value="">All Statuses</option>
+            <option value="Preparing">Preparing</option>
+            <option value="Ready">Ready</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="orders-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- CUSTOMERS -->
+      <section id="sec-customers" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Customers</h2>
+            <p>View all registered customers and their order history.</p>
+          </div>
+        </div>
+        <div id="admin-customers-list"></div>
+      </section>
+
+      <!-- FEEDBACK -->
+      <section id="sec-feedback" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Customer Feedback</h2>
+            <p>See what your customers are saying.</p>
+          </div>
+        </div>
+        <div id="admin-feedback-list"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="sec-settings" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Settings</h2>
+            <p>Manage data backups and administrator accounts.</p>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <!-- Data Management -->
+          <div class="settings-card">
+            <h3><i class="fas fa-database"></i> Data Management</h3>
+            <p class="settings-desc">Your data is automatically saved in this browser. Export regularly for a permanent
+              backup file you can restore on any PC.</p>
+            <div class="settings-actions">
+              <button class="btn-primary" onclick="exportData()"><i class="fas fa-download"></i> Export Data to
+                File</button>
+              <button class="btn-outline" onclick="document.getElementById('import-file').click()"><i
+                  class="fas fa-upload"></i> Import Data from File</button>
+              <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+              <button class="btn-danger" onclick="clearAllData()"><i class="fas fa-trash"></i> Clear All Data</button>
+            </div>
+            <div class="settings-note"><i class="fas fa-info-circle"></i> Data survives browser closes &amp; reboots.
+              Export to keep a portable backup.</div>
+          </div>
+
+          <!-- Currency -->
+          <div class="settings-card">
+            <h3><i class="fas fa-coins"></i> Currency</h3>
+            <p class="settings-desc">Choose the currency displayed across the entire app — menus, orders, receipts and
+              reports.</p>
+            <div class="form-group">
+              <label>Select Currency</label>
+              <div class="inp-wrap"><i class="fas fa-globe"></i>
+                <select id="currency-select" onchange="saveCurrencySetting(this.value)"></select>
+              </div>
+            </div>
+            <div class="settings-note" id="currency-preview"></div>
+          </div>
+
+          <!-- Admin Accounts -->
+          <div class="settings-card">
+            <h3><i class="fas fa-user-shield"></i> Admin Accounts</h3>
+            <div id="admin-accounts-list"></div>
+            <button class="btn-primary" style="margin-top:16px;width:100%" onclick="showAddAdminModal()"><i
+                class="fas fa-plus"></i> Add New Admin</button>
+          </div>
+
+          <!-- Cashier Accounts -->
+          <div class="settings-card">
+            <h3><i class="fas fa-cash-register"></i> Cashier Accounts</h3>
+            <p class="settings-desc">Cashiers handle walk-in orders at the counter using the POS terminal.</p>
+            <div id="cashier-accounts-list"></div>
+            <button class="btn-primary" style="margin-top:16px;width:100%" onclick="showAddCashierModal()"><i
+                class="fas fa-plus"></i> Add New Cashier</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========== CUSTOMER PAGE ========== -->
+  <div id="page-customer" class="page hidden">
+    <header class="cust-header">
+      <div class="cust-brand"><span>🍔</span><span>FastBite</span></div>
+      <nav class="cust-nav">
+        <button class="cnav-btn active" id="cnav-home" onclick="custNav('home')"><i class="fas fa-utensils"></i>
+          Menu</button>
+        <button class="cnav-btn" id="cnav-orders" onclick="custNav('orders')"><i class="fas fa-shopping-bag"></i> My
+          Orders</button>
+        <button class="cnav-btn" id="cnav-feedback" onclick="custNav('feedback')"><i class="fas fa-star"></i>
+          Feedback</button>
+      </nav>
+      <div class="cust-hdr-right">
+        <button class="cart-btn" onclick="custNav('cart')">
+          <i class="fas fa-shopping-cart"></i>
+          <span class="cart-badge" id="cart-count">0</span>
+        </button>
+        <div class="cust-user" onclick="showCustomerProfileModal()" title="Edit profile" style="cursor:pointer">
+          <div class="avatar" id="cust-avatar">C</div>
+          <span id="cust-name">Customer</span>
+        </div>
+        <button class="logout-btn" onclick="doLogout()"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+    </header>
+
+    <main class="cust-main">
+
+      <!-- HOME / MENU -->
+      <section id="csec-home" class="cust-sec active">
+        <div class="menu-hero">
+          <h1>Hungry? <span class="yellow">We Got You!</span></h1>
+          <p>Fresh, hot &amp; delicious — ready in minutes</p>
+        </div>
+        <div class="cat-tabs" id="cat-tabs">
+          <button class="cat-tab active" onclick="filterCat(this,'')">All</button>
+          <button class="cat-tab" onclick="filterCat(this,'Burgers')">🍔 Burgers</button>
+          <button class="cat-tab" onclick="filterCat(this,'Pizzas')">🍕 Pizzas</button>
+          <button class="cat-tab" onclick="filterCat(this,'Sides')">🍟 Sides</button>
+          <button class="cat-tab" onclick="filterCat(this,'Desserts')">🍰 Desserts</button>
+          <button class="cat-tab" onclick="filterCat(this,'Drinks')">🥤 Drinks</button>
+        </div>
+        <div class="cust-menu-grid" id="cust-menu-grid"></div>
+      </section>
+
+      <!-- CART -->
+      <section id="csec-cart" class="cust-sec hidden">
+        <div class="sec-header">
+          <h2><i class="fas fa-shopping-cart"></i> Your Cart</h2>
+        </div>
+        <div class="cart-layout">
+          <div id="cart-items"></div>
+          <div class="cart-summary">
+            <h3>Order Summary</h3>
+            <div id="cart-summary-lines"></div>
+            <div class="summary-total" id="cart-total"></div>
+            <button class="btn-primary btn-full" onclick="custNav('checkout')"><i class="fas fa-credit-card"></i>
+              Checkout</button>
+            <button class="btn-outline btn-full" onclick="custNav('home')"><i class="fas fa-arrow-left"></i> Continue
+              Shopping</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHECKOUT -->
+      <section id="csec-checkout" class="cust-sec hidden">
+        <div class="sec-header">
+          <h2><i class="fas fa-credit-card"></i> Checkout</h2>
+        </div>
+        <div class="checkout-layout">
+          <div class="checkout-left">
+            <div class="co-card">
+              <h3><i class="fas fa-map-marker-alt"></i> Delivery Details</h3>
+              <div class="form-group"><label>Full Name</label>
+                <div class="inp-wrap"><i class="fas fa-user"></i><input type="text" id="co-name"
+                    placeholder="Your name"></div>
+              </div>
+              <div class="form-group"><label>Phone Number</label>
+                <div class="inp-wrap"><i class="fas fa-phone"></i><input type="tel" id="co-phone"
+                    placeholder="+92 300 0000000"></div>
+              </div>
+              <div class="form-group"><label>Delivery Address</label>
+                <div class="inp-wrap"><i class="fas fa-home"></i><input type="text" id="co-address"
+                    placeholder="House 1, Street 2, City"></div>
+              </div>
+            </div>
+            <div class="co-card">
+              <h3><i class="fas fa-credit-card"></i> Payment Method</h3>
+              <div class="pay-opts">
+                <label class="pay-opt active" id="pay-cash-lbl">
+                  <input type="radio" name="pay" value="Cash" checked onchange="switchPayment(this)">
+                  <i class="fas fa-money-bill-wave"></i> Cash on Delivery
+                </label>
+                <label class="pay-opt" id="pay-card-lbl">
+                  <input type="radio" name="pay" value="Card" onchange="switchPayment(this)">
+                  <i class="fas fa-credit-card"></i> Credit / Debit Card
+                </label>
+              </div>
+              <div id="card-fields" class="hidden">
+                <div class="form-group"><label>Card Number</label>
+                  <div class="inp-wrap"><i class="fas fa-credit-card"></i><input type="text" id="co-card"
+                      placeholder="1234 5678 9012 3456" maxlength="19" oninput="fmtCard(this)"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Expiry (MM/YY)</label>
+                    <div class="inp-wrap"><i class="fas fa-calendar"></i><input type="text" id="co-expiry"
+                        placeholder="MM/YY" maxlength="5"></div>
+                  </div>
+                  <div class="form-group"><label>CVV</label>
+                    <div class="inp-wrap"><i class="fas fa-lock"></i><input type="text" id="co-cvv" placeholder="123"
+                        maxlength="3"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="checkout-right">
+            <h3>Order Summary</h3>
+            <div id="co-items"></div>
+            <div class="summary-total" id="co-total"></div>
+            <button class="btn-primary btn-full" onclick="placeOrder()"><i class="fas fa-check-circle"></i> Place
+              Order</button>
+            <button class="btn-outline btn-full" onclick="custNav('cart')"><i class="fas fa-arrow-left"></i> Back to
+              Cart</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- MY ORDERS -->
+      <section id="csec-orders" class="cust-sec hidden">
+        <div class="sec-header">
+          <h2><i class="fas fa-shopping-bag"></i> My Orders</h2>
+        </div>
+        <div id="cust-orders-list"></div>
+      </section>
+
+      <!-- FEEDBACK -->
+      <section id="csec-feedback" class="cust-sec hidden">
+        <div class="sec-header">
+          <h2><i class="fas fa-star"></i> Leave Feedback</h2>
+        </div>
+        <div class="feedback-layout">
+          <div class="fb-form-card">
+            <h3>Submit a Review</h3>
+            <div class="form-group"><label>Select Order</label>
+              <div class="inp-wrap"><i class="fas fa-shopping-bag"></i>
+                <select id="fb-order">
+                  <option value="">Choose an order...</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Your Rating</label>
+              <div class="star-rating" id="star-rating">
+                <span class="star" data-v="1">★</span>
+                <span class="star" data-v="2">★</span>
+                <span class="star" data-v="3">★</span>
+                <span class="star" data-v="4">★</span>
+                <span class="star" data-v="5">★</span>
+              </div>
+            </div>
+            <div class="form-group"><label>Comment</label>
+              <textarea id="fb-comment" placeholder="Tell us about your experience..." rows="4"></textarea>
+            </div>
+            <button class="btn-primary btn-full" onclick="submitFeedback()"><i class="fas fa-paper-plane"></i> Submit
+              Feedback</button>
+          </div>
+          <div class="fb-history-card">
+            <h3>My Past Reviews</h3>
+            <div id="my-feedback"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========== CASHIER / POS PAGE ========== -->
+  <div id="page-cashier" class="page hidden">
+    <header class="cashier-header">
+      <div class="cashier-brand"><span>🍔</span><span>FastBite</span><span class="cashier-tag">POS Terminal</span></div>
+      <nav class="pos-nav">
+        <button class="pos-nav-btn active" id="posnav-order" onclick="posNav('order')"><i
+            class="fas fa-cash-register"></i> New Order</button>
+        <button class="pos-nav-btn" id="posnav-orders" onclick="posNav('orders')"><i class="fas fa-list-alt"></i>
+          Orders</button>
+        <button class="pos-nav-btn" id="posnav-customers" onclick="posNav('customers')"><i class="fas fa-users"></i>
+          Customers</button>
+      </nav>
+      <div class="cashier-hdr-right">
+        <div class="avatar" id="cashier-avatar">C</div>
+        <span id="cashier-name" style="font-weight:600;font-size:.9rem">Cashier</span>
+        <button class="logout-btn" onclick="doLogout()"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+    </header>
+
+    <!-- POS ORDER PANEL -->
+    <div class="pos-layout" id="pos-sec-order">
+      <!-- LEFT: Menu -->
+      <div class="pos-menu-panel">
+        <div class="pos-search-bar">
+          <div class="inp-wrap" style="margin:0">
+            <i class="fas fa-search"></i>
+            <input type="text" id="pos-search" placeholder="Search menu..." oninput="renderPosMenu()">
+          </div>
+        </div>
+        <div class="cat-tabs" id="pos-cat-tabs" style="padding:0 16px">
+          <!-- dynamically generated -->
+        </div>
+        <div class="pos-items-grid" id="pos-items-grid"></div>
+      </div>
+      <!-- RIGHT: Current Order -->
+      <div class="pos-order-panel">
+        <div class="pos-order-header">
+          <h3><i class="fas fa-receipt"></i> Current Order</h3>
+          <div class="form-group" style="margin:12px 0 0">
+            <div class="inp-wrap"><i class="fas fa-user"></i>
+              <input type="text" id="pos-customer" list="pos-customers-dl" placeholder="Customer name (walk-in)">
+              <datalist id="pos-customers-dl"></datalist>
+            </div>
+          </div>
+        </div>
+        <div class="pos-order-items" id="pos-order-items"></div>
+        <div class="pos-order-footer" id="pos-order-footer"></div>
+      </div>
+    </div>
+
+    <!-- ORDERS LIST PANEL -->
+    <div class="pos-orders-view hidden" id="pos-sec-orders">
+      <div class="sec-header" style="padding:24px 28px 0">
+        <div>
+          <h2><i class="fas fa-list-alt" style="color:var(--yellow)"></i> Orders</h2>
+          <p>View and manage all current orders. Update status as food is prepared and served.</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <select id="pos-status-filter" onchange="renderCashierOrders()" class="inp-wrap"
+            style="padding:8px 12px;height:auto;font-size:.85rem;background:var(--surf);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--fg);cursor:pointer">
+            <option value="">All Statuses</option>
+            <option value="Preparing">Preparing</option>
+            <option value="Ready">Ready</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div id="cashier-orders-list" style="padding:20px 28px"></div>
+    </div>
+
+    <!-- CUSTOMERS LIST PANEL -->
+    <div class="pos-orders-view hidden" id="pos-sec-customers">
+      <div class="sec-header" style="padding:24px 28px 0;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h2><i class="fas fa-users" style="color:var(--yellow)"></i> Customers</h2>
+          <p>Register new walk-in customers or edit existing ones.</p>
+        </div>
+        <button class="btn-primary" onclick="showAddCashierCustomer()"><i class="fas fa-plus"></i> Add Customer</button>
+      </div>
+      <div id="cashier-customers-list" style="padding:20px 28px"></div>
+    </div>
+  </div>
+
+
+  <script src="app.js"></script>
+</body>
+
+</html>
