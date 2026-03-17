@@ -3,56 +3,166 @@
    All application logic: DB, Auth, Admin, Customer, Utilities
    ============================================================ */
 
-// ===== DATABASE =====
-const DB = {
-  getUsers: () => JSON.parse(localStorage.getItem('fb_users') || '[]'),
-  saveUsers: (d) => localStorage.setItem('fb_users', JSON.stringify(d)),
-  getItems: () => JSON.parse(localStorage.getItem('fb_items') || '[]'),
-  saveItems: (d) => localStorage.setItem('fb_items', JSON.stringify(d)),
-  getOrders: () => JSON.parse(localStorage.getItem('fb_orders') || '[]'),
-  saveOrders: (d) => localStorage.setItem('fb_orders', JSON.stringify(d)),
-  getFeedback: () => JSON.parse(localStorage.getItem('fb_feedback') || '[]'),
-  saveFeedback: (d) => localStorage.setItem('fb_feedback', JSON.stringify(d)),
-  getCart: () => JSON.parse(localStorage.getItem('fb_cart') || '[]'),
-  saveCart: (d) => localStorage.setItem('fb_cart', JSON.stringify(d)),
-  clearCart: () => localStorage.removeItem('fb_cart'),
-  getSession: () => JSON.parse(sessionStorage.getItem('fb_session') || 'null'),
-  setSession: (u) => sessionStorage.setItem('fb_session', JSON.stringify(u)),
-  clearSession: () => sessionStorage.removeItem('fb_session'),
-  getCurrency: () => localStorage.getItem('fb_currency') || 'PKR|₨|Pakistani Rupee',
-  saveCurrency: (v) => localStorage.setItem('fb_currency', v),
+const DEFAULT_CURRENCY = 'PKR|₨|Pakistani Rupee';
 
-  init() {
-    // Default super admin
-    const users = this.getUsers();
-    const existing = users.find(u => u.email === 'admin@gmail.com');
-    if (!existing) {
-      users.push({ id: uid(), name: 'Super Admin', email: 'admin@gmail.com', password: '123', role: 'admin', isSuperAdmin: true, createdAt: now() });
-      this.saveUsers(users);
-    } else if (!existing.isSuperAdmin) {
-      existing.isSuperAdmin = true;
-      this.saveUsers(users);
+const state = {
+  session: null,
+  items: [],
+  orders: [],
+  feedback: [],
+  coupons: [],
+  admins: [],
+  cashiers: [],
+  customers: [],
+  customerSummaries: [],
+  cart: { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null },
+  currency: DEFAULT_CURRENCY
+};
+
+const API = {
+  async request(url, options = {}) {
+    const config = { method: 'GET', credentials: 'include', ...options };
+    const headers = { ...(options.headers || {}) };
+    if (!(config.body instanceof FormData) && config.body !== undefined && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
     }
-    // Default menu items
-    if (this.getItems().length === 0) {
-      this.saveItems([
-        { id: uid(), name: 'Classic Burger', category: 'Burgers', price: 8.99, description: 'Juicy beef patty with lettuce, tomato & special sauce', icon: '🍔', available: true, createdAt: now() },
-        { id: uid(), name: 'Double Smash Burger', category: 'Burgers', price: 12.99, description: 'Double smashed patties, melted cheese & caramelized onions', icon: '🍔', available: true, createdAt: now() },
-        { id: uid(), name: 'Crispy Chicken Burger', category: 'Burgers', price: 9.99, description: 'Crispy fried chicken fillet with coleslaw and mayo', icon: '🍗', available: true, createdAt: now() },
-        { id: uid(), name: 'Zinger Burger', category: 'Burgers', price: 10.99, description: 'Spicy fried chicken with jalapeños and sriracha mayo', icon: '🔥', available: true, createdAt: now() },
-        { id: uid(), name: 'Pepperoni Pizza', category: 'Pizzas', price: 14.99, description: 'Classic pepperoni on mozzarella & tomato base', icon: '🍕', available: true, createdAt: now() },
-        { id: uid(), name: 'BBQ Chicken Pizza', category: 'Pizzas', price: 16.99, description: 'Smoky BBQ sauce, grilled chicken, red onion & peppers', icon: '🍕', available: true, createdAt: now() },
-        { id: uid(), name: 'Margherita Pizza', category: 'Pizzas', price: 12.99, description: 'Fresh tomato, mozzarella & basil leaves', icon: '🍕', available: true, createdAt: now() },
-        { id: uid(), name: 'Fried Chicken (3 pcs)', category: 'Sides', price: 7.99, description: '3 pieces of golden crispy fried chicken', icon: '🍗', available: true, createdAt: now() },
-        { id: uid(), name: 'French Fries (Large)', category: 'Sides', price: 3.99, description: 'Crispy golden fries with your choice of dip', icon: '🍟', available: true, createdAt: now() },
-        { id: uid(), name: 'Onion Rings', category: 'Sides', price: 4.99, description: 'Crispy beer-battered onion rings', icon: '🧅', available: true, createdAt: now() },
-        { id: uid(), name: 'Chocolate Lava Cake', category: 'Desserts', price: 5.99, description: 'Warm chocolate cake with molten center & vanilla ice cream', icon: '🎂', available: true, createdAt: now() },
-        { id: uid(), name: 'Ice Cream Sundae', category: 'Desserts', price: 4.49, description: 'Creamy vanilla soft serve with hot fudge & whipped cream', icon: '🍨', available: true, createdAt: now() },
-        { id: uid(), name: 'Soda (Large)', category: 'Drinks', price: 2.99, description: 'Chilled fizzy drink — Coke, Pepsi, Sprite, or Fanta', icon: '🥤', available: true, createdAt: now() },
-        { id: uid(), name: 'Chocolate Milkshake', category: 'Drinks', price: 4.99, description: 'Thick and creamy chocolate milkshake', icon: '🥛', available: true, createdAt: now() },
-        { id: uid(), name: 'Fresh Juice', category: 'Drinks', price: 3.49, description: 'Freshly squeezed orange or mango juice', icon: '🍊', available: true, createdAt: now() },
-      ]);
+    if (Object.keys(headers).length) config.headers = headers;
+
+    const resp = await fetch(url, config);
+    const contentType = resp.headers.get('content-type') || '';
+    const data = contentType.includes('application/json') ? await resp.json() : await resp.text();
+    if (!resp.ok) {
+      throw new Error(data?.message || `Request failed (${resp.status})`);
     }
+    return data;
+  },
+  get(url) { return this.request(url); },
+  post(url, body, extra = {}) {
+    return this.request(url, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body), ...extra });
+  },
+  put(url, body, extra = {}) {
+    return this.request(url, { method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body), ...extra });
+  },
+  patch(url, body, extra = {}) {
+    return this.request(url, { method: 'PATCH', body: JSON.stringify(body), ...extra });
+  },
+  delete(url, extra = {}) {
+    return this.request(url, { method: 'DELETE', ...extra });
+  }
+};
+
+function emptyCart() {
+  return { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null };
+}
+
+function normalizeItem(item) {
+  return { ...item, image: item.imageUrl || null };
+}
+
+function applyCouponSelections() {
+  custCoupon = state.coupons.find(c => c.code === state.cart.couponCode) || null;
+}
+
+function syncCustomerCart(cart) {
+  state.cart = cart || emptyCart();
+  applyCouponSelections();
+}
+
+function refreshCustomerCartViews() {
+  updateCartBadge();
+  if (document.getElementById('csec-cart')?.classList.contains('active')) renderCart();
+  if (document.getElementById('csec-checkout')?.classList.contains('active')) renderCheckout();
+}
+
+const DB = {
+  getUsers: () => [...state.admins, ...state.cashiers, ...state.customers],
+  saveUsers: (d) => {
+    state.customers = d.filter(u => u.role === 'customer');
+    state.admins = d.filter(u => u.role === 'admin');
+    state.cashiers = d.filter(u => u.role === 'cashier');
+  },
+  getItems: () => state.items,
+  saveItems: (d) => { state.items = d; },
+  getOrders: () => state.orders,
+  saveOrders: (d) => { state.orders = d; },
+  getFeedback: () => state.feedback,
+  saveFeedback: (d) => { state.feedback = d; },
+  getCoupons: () => state.coupons,
+  saveCoupons: (d) => { state.coupons = d; },
+  getCart: () => state.cart.items || [],
+  saveCart: (d) => { state.cart = { ...state.cart, items: d }; },
+  clearCart: () => { state.cart = emptyCart(); custCoupon = null; },
+  getSession: () => state.session,
+  setSession: (u) => { state.session = u; },
+  clearSession: () => { state.session = null; },
+  getCurrency: () => state.currency || DEFAULT_CURRENCY,
+  saveCurrency: (v) => { state.currency = v; },
+
+  reset() {
+    state.session = null;
+    state.items = [];
+    state.orders = [];
+    state.feedback = [];
+    state.coupons = [];
+    state.admins = [];
+    state.cashiers = [];
+    state.customers = [];
+    state.customerSummaries = [];
+    state.cart = emptyCart();
+    state.currency = DEFAULT_CURRENCY;
+    custCoupon = null;
+  },
+
+  async init() {
+    try {
+      state.session = await API.get('/api/auth/me');
+      await this.refreshForSession();
+    } catch {
+      this.reset();
+    }
+  },
+
+  async refreshForSession() {
+    if (!state.session) return;
+    if (state.session.role === 'admin') await this.refreshAdmin();
+    else if (state.session.role === 'cashier') await this.refreshCashier();
+    else await this.refreshCustomer();
+  },
+
+  async refreshAdmin() {
+    const data = await API.get('/api/admin/bootstrap');
+    state.session = data.session;
+    state.items = (data.items || []).map(normalizeItem);
+    state.orders = data.orders || [];
+    state.feedback = data.feedback || [];
+    state.customerSummaries = data.customers || [];
+    state.customers = state.customerSummaries.map(c => ({ id: c.id, name: c.name, email: c.email, role: 'customer', createdAt: c.createdAt }));
+    state.admins = data.admins || [];
+    state.cashiers = data.cashiers || [];
+    state.coupons = data.coupons || [];
+    state.currency = data.currency || DEFAULT_CURRENCY;
+  },
+
+  async refreshCustomer() {
+    const data = await API.get('/api/customer/bootstrap');
+    state.session = data.session;
+    state.items = (data.items || []).map(normalizeItem);
+    state.orders = data.orders || [];
+    state.feedback = data.feedback || [];
+    state.coupons = data.coupons || [];
+    state.cart = data.cart || emptyCart();
+    state.currency = data.currency || DEFAULT_CURRENCY;
+    applyCouponSelections();
+  },
+
+  async refreshCashier() {
+    const data = await API.get('/api/cashier/bootstrap');
+    state.session = data.session;
+    state.items = (data.items || []).map(normalizeItem);
+    state.orders = data.orders || [];
+    state.customers = data.customers || [];
+    state.coupons = data.coupons || [];
+    state.currency = data.currency || DEFAULT_CURRENCY;
   }
 };
 
@@ -117,41 +227,44 @@ function showSignup() {
   document.getElementById('tab-login').classList.remove('active');
 }
 
-function doLogin(e) {
+async function doLogin(e) {
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-password').value;
-  const users = DB.getUsers();
-  const user = users.find(u => u.email === email && u.password === pass);
-  if (!user) { toast('Invalid email or password', 'error'); return; }
-  DB.setSession(user);
-  toast(`Welcome back, ${user.name}!`, 'success');
-  if (user.role === 'admin') loadAdmin();
-  else if (user.role === 'cashier') loadCashier();
-  else loadCustomer();
+  try {
+    const user = await API.post('/api/auth/login', { email, password: pass });
+    DB.setSession(user);
+    await DB.refreshForSession();
+    toast(`Welcome back, ${user.name}!`, 'success');
+    if (user.role === 'admin') await loadAdmin(false);
+    else if (user.role === 'cashier') await loadCashier(false);
+    else await loadCustomer(false);
+  } catch (err) {
+    toast(err.message || 'Invalid email or password', 'error');
+  }
 }
 
-function doSignup(e) {
+async function doSignup(e) {
   e.preventDefault();
   const name = document.getElementById('su-name').value.trim();
-  const role = 'customer'; // public signup is customers only
   const email = document.getElementById('su-email').value.trim();
   const pass = document.getElementById('su-pass').value;
   const confirm = document.getElementById('su-confirm').value;
   if (pass !== confirm) { toast('Passwords do not match', 'error'); return; }
-  const users = DB.getUsers();
-  if (users.find(u => u.email === email)) { toast('Email already registered', 'error'); return; }
-  const user = { id: uid(), name, email, password: pass, role, createdAt: now() };
-  users.push(user);
-  DB.saveUsers(users);
-  DB.setSession(user);
-  toast(`Account created! Welcome, ${name}!`, 'success');
-  loadCustomer();
+  try {
+    const user = await API.post('/api/auth/signup', { name, email, password: pass, confirmPassword: confirm });
+    DB.setSession(user);
+    await DB.refreshCustomer();
+    toast(`Account created! Welcome, ${name}!`, 'success');
+    await loadCustomer(false);
+  } catch (err) {
+    toast(err.message || 'Unable to create account', 'error');
+  }
 }
 
-function doLogout() {
-  DB.clearSession();
-  DB.clearCart();
+async function doLogout() {
+  try { await API.post('/api/auth/logout', {}); } catch { }
+  DB.reset();
   showPage('page-auth');
   showLogin();
   document.getElementById('login-email').value = '';
@@ -160,16 +273,24 @@ function doLogout() {
 }
 
 // ===== ADMIN =====
-function loadAdmin() {
+async function loadAdmin(refresh = true) {
+  if (refresh) await DB.refreshAdmin();
   const user = DB.getSession();
   document.getElementById('admin-name').textContent = user.name;
   document.getElementById('admin-avatar').textContent = user.name[0].toUpperCase();
+
+  if (isSuperAdmin()) {
+    document.getElementById('nav-coupons').style.display = 'block';
+  } else {
+    document.getElementById('nav-coupons').style.display = 'none';
+  }
+
   showPage('page-admin');
   adminNav('dashboard');
 }
 
 function adminNav(sec) {
-  ['dashboard', 'menu', 'orders', 'customers', 'feedback', 'settings'].forEach(s => {
+  ['dashboard', 'menu', 'orders', 'customers', 'feedback', 'coupons', 'settings'].forEach(s => {
     document.getElementById('sec-' + s).classList.toggle('active', s === sec);
     document.getElementById('sec-' + s).classList.toggle('hidden', s !== sec);
     document.getElementById('nav-' + s).classList.toggle('active', s === sec);
@@ -179,6 +300,7 @@ function adminNav(sec) {
   if (sec === 'orders') renderOrders();
   if (sec === 'customers') renderCustomers();
   if (sec === 'feedback') renderAdminFeedback();
+  if (sec === 'coupons') renderAdminCoupons();
   if (sec === 'settings') renderSettings();
 }
 
@@ -303,36 +425,46 @@ function showEditItem(id) {
   if (item) showModal('Edit Menu Item', itemFormHtml(item));
 }
 
-function saveItem(id) {
+async function saveItem(id) {
   const name = document.getElementById('it-name').value.trim();
   const cat = document.getElementById('it-cat').value;
   const price = parseFloat(document.getElementById('it-price').value);
   const desc = document.getElementById('it-desc').value.trim();
   const icon = document.getElementById('it-icon').value.trim() || '🍽️';
   const avail = document.getElementById('it-avail').value === 'true';
-  const preview = document.getElementById('it-img-preview');
-  const image = preview?.dataset.b64 || null;
   if (!name || isNaN(price) || price < 0) { toast('Please fill all fields correctly', 'error'); return; }
-  let items = DB.getItems();
-  if (id) {
-    items = items.map(i => i.id === id
-      ? { ...i, name, category: cat, price, description: desc, icon, available: avail, image: image !== null ? image : i.image }
-      : i);
-    toast('Item updated!', 'success');
-  } else {
-    items.push({ id: uid(), name, category: cat, price, description: desc, icon, image, available: avail, createdAt: now() });
-    toast('Item added!', 'success');
+  try {
+    const form = new FormData();
+    form.append('name', name);
+    form.append('category', cat);
+    form.append('price', price);
+    form.append('description', desc);
+    form.append('icon', icon);
+    form.append('available', String(avail));
+    const fileInput = document.getElementById('it-img-input');
+    if (fileInput?.files?.[0]) form.append('image', fileInput.files[0]);
+    if (fileInput && !fileInput.value && !document.querySelector('#it-img-preview img')) form.append('removeImage', 'true');
+    if (id) await API.put(`/api/menu-items/${id}`, form);
+    else await API.post('/api/menu-items', form);
+    await DB.refreshAdmin();
+    closeModal();
+    toast(id ? 'Item updated!' : 'Item added!', 'success');
+    renderAdminMenu();
+  } catch (err) {
+    toast(err.message || 'Unable to save item', 'error');
   }
-  DB.saveItems(items);
-  closeModal();
-  renderAdminMenu();
 }
 
-function deleteItem(id) {
+async function deleteItem(id) {
   if (!confirm('Delete this menu item?')) return;
-  DB.saveItems(DB.getItems().filter(i => i.id !== id));
-  toast('Item deleted', 'info');
-  renderAdminMenu();
+  try {
+    await API.delete(`/api/menu-items/${id}`);
+    await DB.refreshAdmin();
+    toast('Item deleted', 'info');
+    renderAdminMenu();
+  } catch (err) {
+    toast(err.message || 'Unable to delete item', 'error');
+  }
 }
 
 function renderOrders() {
@@ -361,11 +493,15 @@ function renderOrders() {
     </tr>`).join('');
 }
 
-function updateOrderStatus(id, status) {
-  const orders = DB.getOrders().map(o => o.id === id ? { ...o, status } : o);
-  DB.saveOrders(orders);
-  toast(`Order status updated to ${status}`, 'success');
-  renderOrders();
+async function updateOrderStatus(id, status) {
+  try {
+    await API.put(`/api/admin/orders/${id}/status`, { status });
+    await DB.refreshAdmin();
+    toast(`Order status updated to ${status}`, 'success');
+    renderOrders();
+  } catch (err) {
+    toast(err.message || 'Unable to update order', 'error');
+  }
 }
 
 function cancelOrder(id) {
@@ -390,12 +526,16 @@ function cancelOrder(id) {
   `);
 }
 
-function confirmCancelOrder(id) {
-  const orders = DB.getOrders();
-  DB.saveOrders(orders.map(o => o.id === id ? { ...o, status: 'Cancelled' } : o));
-  closeModal();
-  toast('Order cancelled successfully', 'info');
-  renderCustOrders();
+async function confirmCancelOrder(id) {
+  try {
+    await API.post(`/api/customer/orders/${id}/cancel`, {});
+    await DB.refreshCustomer();
+    closeModal();
+    toast('Order cancelled successfully', 'info');
+    renderCustOrders();
+  } catch (err) {
+    toast(err.message || 'Unable to cancel order', 'error');
+  }
 }
 
 function renderAdminFeedback() {
@@ -481,13 +621,130 @@ function deleteCustomer(id) {
   `);
 }
 
-function confirmDeleteUser(id, returnSec) {
-  DB.saveUsers(DB.getUsers().filter(u => u.id !== id));
-  DB.saveOrders(DB.getOrders().filter(o => o.customerId !== id));
-  DB.saveFeedback(DB.getFeedback().filter(f => f.customerId !== id));
-  closeModal();
-  toast('Account deleted', 'info');
-  adminNav(returnSec);
+async function confirmDeleteUser(id, returnSec) {
+  try {
+    await API.delete(`/api/admin/customers/${id}`);
+    await DB.refreshAdmin();
+    closeModal();
+    toast('Account deleted', 'info');
+    adminNav(returnSec);
+  } catch (err) {
+    toast(err.message || 'Unable to delete account', 'error');
+  }
+}
+
+// ===== COUPONS ADMIN =====
+function renderAdminCoupons() {
+  const coupons = DB.getCoupons();
+  const tbody = document.getElementById('admin-coupons-tbody');
+  if (!tbody) return;
+  if (!coupons.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-tags" style="font-size:2rem;display:block;margin-bottom:10px"></i>No coupons found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = coupons.map(c => `
+    <tr>
+      <td style="font-weight:700;color:var(--yellow)">${c.code}</td>
+      <td>${c.discountType === 'percentage' ? c.discountValue + '%' : fmtPrice(c.discountValue)}</td>
+      <td style="color:var(--text2);font-size:.85rem">
+        ${c.minOrderAttr > 0 ? `Min: ${fmtPrice(c.minOrderAttr)}<br>` : ''}
+        ${c.applicableCategory ? `Cat: ${c.applicableCategory}` : 'All Items'}
+      </td>
+      <td><span class="badge ${c.status === 'Active' ? 'badge-available' : 'badge-unavailable'}">${c.status}</span></td>
+      <td>
+        <button class="btn-icon" onclick="showEditCouponModal('${c.id}')" title="Edit"><i class="fas fa-pen"></i></button>
+        <button class="btn-icon danger" onclick="deleteCoupon('${c.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+function couponFormHtml(coupon) {
+  const cats = ['', 'Burgers', 'Pizzas', 'Sides', 'Desserts', 'Drinks'];
+  return `
+    <div class="form-group">
+      <label>Coupon Code</label>
+      <div class="inp-wrap"><i class="fas fa-tag"></i><input type="text" id="cp-code" value="${coupon?.code || ''}" placeholder="e.g. SUMMER20" required style="text-transform:uppercase"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Discount Type</label>
+        <div class="inp-wrap"><i class="fas fa-percent"></i>
+          <select id="cp-type">
+            <option value="percentage" ${coupon?.discountType === 'percentage' ? 'selected' : ''}>Percentage (%)</option>
+            <option value="fixed" ${coupon?.discountType === 'fixed' ? 'selected' : ''}>Fixed Amount</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Discount Value</label>
+        <div class="inp-wrap"><i class="fas fa-coins"></i><input type="number" id="cp-value" value="${coupon?.discountValue || ''}" placeholder="10" step="0.01" min="0" required></div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Min Order Total</label>
+        <div class="inp-wrap"><i class="fas fa-dollar-sign"></i><input type="number" id="cp-min" value="${coupon?.minOrderAttr || 0}" placeholder="0 for no min" step="0.01" min="0"></div>
+      </div>
+      <div class="form-group">
+        <label>Applicable Category</label>
+        <div class="inp-wrap"><i class="fas fa-layer-group"></i>
+          <select id="cp-cat">
+            ${cats.map(c => `<option value="${c}" ${coupon?.applicableCategory === c ? 'selected' : ''}>${c ? c : 'All Categories'}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <div class="inp-wrap"><i class="fas fa-toggle-on"></i>
+        <select id="cp-status">
+          <option value="Active" ${coupon?.status === 'Active' ? 'selected' : ''}>Active</option>
+          <option value="Inactive" ${coupon?.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-primary btn-full" style="margin-top:8px" onclick="saveCoupon(${coupon ? `'${coupon.id}'` : null})"><i class="fas fa-save"></i> Save Coupon</button>
+  `;
+}
+
+function showAddCouponModal() { showModal('Add New Coupon', couponFormHtml(null)); }
+function showEditCouponModal(id) {
+  const coupon = DB.getCoupons().find(c => c.id === id);
+  if (coupon) showModal('Edit Coupon', couponFormHtml(coupon));
+}
+
+async function saveCoupon(id) {
+  const code = document.getElementById('cp-code').value.trim().toUpperCase();
+  const type = document.getElementById('cp-type').value;
+  const value = parseFloat(document.getElementById('cp-value').value);
+  const min = parseFloat(document.getElementById('cp-min').value) || 0;
+  const cat = document.getElementById('cp-cat').value;
+  const status = document.getElementById('cp-status').value;
+
+  if (!code || isNaN(value) || value <= 0) { toast('Please fill all fields correctly', 'error'); return; }
+  try {
+    const payload = { code, discountType: type, discountValue: value, minOrderAttr: min, applicableCategory: cat, status };
+    if (id) await API.put(`/api/admin/coupons/${id}`, payload);
+    else await API.post('/api/admin/coupons', payload);
+    await DB.refreshAdmin();
+    closeModal();
+    toast(id ? 'Coupon updated!' : 'Coupon added!', 'success');
+    renderAdminCoupons();
+  } catch (err) {
+    toast(err.message || 'Unable to save coupon', 'error');
+  }
+}
+
+async function deleteCoupon(id) {
+  if (!confirm('Delete this coupon?')) return;
+  try {
+    await API.delete(`/api/admin/coupons/${id}`);
+    await DB.refreshAdmin();
+    toast('Coupon deleted', 'info');
+    renderAdminCoupons();
+  } catch (err) {
+    toast(err.message || 'Unable to delete coupon', 'error');
+  }
 }
 
 // ===== SETTINGS =====
@@ -556,19 +813,21 @@ function showAddAdminModal() {
   `);
 }
 
-function saveNewAdmin() {
+async function saveNewAdmin() {
   if (!isSuperAdmin()) { toast('Only the Chief Admin can add admins', 'error'); return; }
   const name = document.getElementById('na-name').value.trim();
   const email = document.getElementById('na-email').value.trim();
   const pass = document.getElementById('na-pass').value;
   if (!name || !email || pass.length < 6) { toast('Fill all fields (min 6-char password)', 'error'); return; }
-  const users = DB.getUsers();
-  if (users.find(u => u.email === email)) { toast('Email already registered', 'error'); return; }
-  users.push({ id: uid(), name, email, password: pass, role: 'admin', isSuperAdmin: false, createdAt: now() });
-  DB.saveUsers(users);
-  closeModal();
-  toast(`Admin "${name}" created!`, 'success');
-  renderSettings();
+  try {
+    await API.post('/api/admin/staff/admins', { name, email, password: pass });
+    await DB.refreshAdmin();
+    closeModal();
+    toast(`Admin "${name}" created!`, 'success');
+    renderSettings();
+  } catch (err) {
+    toast(err.message || 'Unable to create admin', 'error');
+  }
 }
 
 function deleteAdmin(id) {
@@ -591,30 +850,35 @@ function deleteAdmin(id) {
   `);
 }
 
-function confirmDeleteAdmin(id) {
+async function confirmDeleteAdmin(id) {
   if (!isSuperAdmin()) { toast('Only the Chief Admin can remove admins', 'error'); return; }
   const adm = DB.getUsers().find(u => u.id === id);
   if (adm?.isSuperAdmin) { toast('Chief Admin cannot be deleted', 'error'); return; }
-  DB.saveUsers(DB.getUsers().filter(u => u.id !== id));
-  closeModal();
-  toast('Admin removed', 'info');
-  renderSettings();
+  try {
+    await API.delete(`/api/admin/staff/${id}`);
+    await DB.refreshAdmin();
+    closeModal();
+    toast('Admin removed', 'info');
+    renderSettings();
+  } catch (err) {
+    toast(err.message || 'Unable to remove admin', 'error');
+  }
 }
 
 // ===== EXPORT / IMPORT / CLEAR =====
-function exportData() {
-  const data = {
-    version: '1.0', exportedAt: now(),
-    users: DB.getUsers(), items: DB.getItems(),
-    orders: DB.getOrders(), feedback: DB.getFeedback()
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `fastbite-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast('Data exported! \ud83d\udcbe', 'success');
+async function exportData() {
+  try {
+    const data = await API.get('/api/admin/backup/export');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `fastbite-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Data exported! \ud83d\udcbe', 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to export data', 'error');
+  }
 }
 
 function importData(input) {
@@ -646,17 +910,17 @@ function importData(input) {
   input.value = '';
 }
 
-function confirmImport(jsonStr) {
+async function confirmImport(jsonStr) {
   try {
     const data = JSON.parse(jsonStr);
-    DB.saveUsers(data.users || []);
-    DB.saveItems(data.items || []);
-    DB.saveOrders(data.orders || []);
-    DB.saveFeedback(data.feedback || []);
+    await API.post('/api/admin/backup/import', data);
+    await DB.refreshAdmin();
     closeModal();
-    toast('Data imported! \u2705 Reloading...', 'success');
-    setTimeout(() => location.reload(), 1200);
-  } catch { toast('Import failed', 'error'); }
+    toast('Data imported! \u2705', 'success');
+    adminNav('settings');
+  } catch (err) {
+    toast(err.message || 'Import failed', 'error');
+  }
 }
 
 function clearAllData() {
@@ -675,11 +939,16 @@ function clearAllData() {
   `);
 }
 
-function confirmClearAll() {
-  ['fb_users', 'fb_items', 'fb_orders', 'fb_feedback', 'fb_cart', 'fb_session'].forEach(k => localStorage.removeItem(k));
-  closeModal();
-  toast('All data cleared. Reloading...', 'info');
-  setTimeout(() => location.reload(), 1500);
+async function confirmClearAll() {
+  try {
+    await API.delete('/api/admin/backup/all');
+    await DB.refreshAdmin();
+    closeModal();
+    toast('All data cleared.', 'info');
+    adminNav('dashboard');
+  } catch (err) {
+    toast(err.message || 'Unable to clear data', 'error');
+  }
 }
 
 // ===== PROFILE MANAGEMENT =====
@@ -711,8 +980,7 @@ function showCustomerProfileModal() {
   `);
 }
 
-function saveCustomerProfile() {
-  const session = DB.getSession();
+async function saveCustomerProfile() {
   const name = document.getElementById('ep-name').value.trim();
   const email = document.getElementById('ep-email').value.trim();
   const curPass = document.getElementById('ep-cur-pass').value;
@@ -721,28 +989,18 @@ function saveCustomerProfile() {
 
   if (!name || !email) { toast('Name and email are required', 'error'); return; }
   if (!curPass) { toast('Enter your current password to save', 'error'); return; }
-
-  const users = DB.getUsers();
-  const user = users.find(u => u.id === session.id);
-  if (!user || user.password !== curPass) { toast('Current password is incorrect', 'error'); return; }
-
-  if (newPass) {
-    if (newPass.length < 6) { toast('New password must be at least 6 characters', 'error'); return; }
-    if (newPass !== conPass) { toast('Passwords do not match', 'error'); return; }
-    user.password = newPass;
+  try {
+    const updated = await API.put('/api/account/profile', {
+      name, email, currentPassword: curPass, newPassword: newPass || null, confirmPassword: conPass || null
+    });
+    state.session = { ...state.session, ...updated };
+    document.getElementById('cust-name').textContent = updated.name;
+    document.getElementById('cust-avatar').textContent = updated.name[0].toUpperCase();
+    closeModal();
+    toast('Profile updated! ✅', 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to update profile', 'error');
   }
-
-  // Check email uniqueness (ignore self)
-  if (users.find(u => u.email === email && u.id !== user.id)) { toast('Email already in use', 'error'); return; }
-
-  user.name = name;
-  user.email = email;
-  DB.saveUsers(users);
-  DB.setSession(user);
-  document.getElementById('cust-name').textContent = name;
-  document.getElementById('cust-avatar').textContent = name[0].toUpperCase();
-  closeModal();
-  toast('Profile updated! ✅', 'success');
 }
 
 // --- ADMIN: edit own profile (via sidebar footer) ---
@@ -772,8 +1030,7 @@ function showEditMyAdminProfile() {
   `);
 }
 
-function saveMyAdminProfile() {
-  const session = DB.getSession();
+async function saveMyAdminProfile() {
   const name = document.getElementById('amp-name').value.trim();
   const email = document.getElementById('amp-email').value.trim();
   const curPass = document.getElementById('amp-cur').value;
@@ -782,27 +1039,18 @@ function saveMyAdminProfile() {
 
   if (!name || !email) { toast('Name and email are required', 'error'); return; }
   if (!curPass) { toast('Enter your current password to save', 'error'); return; }
-
-  const users = DB.getUsers();
-  const user = users.find(u => u.id === session.id);
-  if (!user || user.password !== curPass) { toast('Current password is incorrect', 'error'); return; }
-
-  if (newPass) {
-    if (newPass.length < 6) { toast('New password must be at least 6 characters', 'error'); return; }
-    if (newPass !== conPass) { toast('Passwords do not match', 'error'); return; }
-    user.password = newPass;
+  try {
+    const updated = await API.put('/api/account/profile', {
+      name, email, currentPassword: curPass, newPassword: newPass || null, confirmPassword: conPass || null
+    });
+    state.session = { ...state.session, ...updated };
+    document.getElementById('admin-name').textContent = updated.name;
+    document.getElementById('admin-avatar').textContent = updated.name[0].toUpperCase();
+    closeModal();
+    toast('Profile updated! ✅', 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to update profile', 'error');
   }
-
-  if (users.find(u => u.email === email && u.id !== user.id)) { toast('Email already in use', 'error'); return; }
-
-  user.name = name;
-  user.email = email;
-  DB.saveUsers(users);
-  DB.setSession(user);
-  document.getElementById('admin-name').textContent = name;
-  document.getElementById('admin-avatar').textContent = name[0].toUpperCase();
-  closeModal();
-  toast('Profile updated! ✅', 'success');
 }
 
 // --- SUPER ADMIN: edit any admin or cashier account ---
@@ -828,26 +1076,22 @@ function showEditAccountModal(id) {
   `);
 }
 
-function saveEditAccount(id) {
+async function saveEditAccount(id) {
   if (!isSuperAdmin()) { toast('Only the Chief Admin can edit other accounts', 'error'); return; }
   const name = document.getElementById('ea-name').value.trim();
   const email = document.getElementById('ea-email').value.trim();
   const pass = document.getElementById('ea-pass').value;
   if (!name || !email) { toast('Name and email are required', 'error'); return; }
   if (pass && pass.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
-
-  const users = DB.getUsers();
-  const target = users.find(u => u.id === id);
-  if (!target) return;
-  if (users.find(u => u.email === email && u.id !== id)) { toast('Email already in use', 'error'); return; }
-
-  target.name = name;
-  target.email = email;
-  if (pass) target.password = pass;
-  DB.saveUsers(users);
-  closeModal();
-  toast(`Account updated for ${name} ✅`, 'success');
-  renderSettings();
+  try {
+    await API.put(`/api/admin/staff/${id}`, { name, email, password: pass || null });
+    await DB.refreshAdmin();
+    closeModal();
+    toast(`Account updated for ${name} ✅`, 'success');
+    renderSettings();
+  } catch (err) {
+    toast(err.message || 'Unable to update account', 'error');
+  }
 }
 
 // ===== CURRENCY SETTINGS =====
@@ -877,12 +1121,17 @@ function renderCurrencyCard() {
   preview.innerHTML = `<i class="fas fa-tag"></i> Preview: <strong>${sym}12.99</strong> &nbsp;·&nbsp; ${name} (${code})`;
 }
 
-function saveCurrencySetting(val) {
-  DB.saveCurrency(val);
-  const [code, sym, name] = val.split('|');
-  document.getElementById('currency-preview').innerHTML =
-    `<i class="fas fa-check-circle" style="color:var(--yellow)"></i> Saved! Prices now show as <strong>${sym}12.99</strong> — ${name} (${code})`;
-  toast(`Currency set to ${name} (${sym})`, 'success');
+async function saveCurrencySetting(val) {
+  try {
+    await API.put('/api/admin/settings/currency', { currency: val });
+    DB.saveCurrency(val);
+    const [code, sym, name] = val.split('|');
+    document.getElementById('currency-preview').innerHTML =
+      `<i class="fas fa-check-circle" style="color:var(--yellow)"></i> Saved! Prices now show as <strong>${sym}12.99</strong> — ${name} (${code})`;
+    toast(`Currency set to ${name} (${sym})`, 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to save currency', 'error');
+  }
 }
 
 // ===== CASHIER ACCOUNTS =====
@@ -921,19 +1170,21 @@ function showAddCashierModal() {
   `);
 }
 
-function saveNewCashier() {
+async function saveNewCashier() {
   if (!isSuperAdmin()) { toast('Only the Chief Admin can add cashiers', 'error'); return; }
   const name = document.getElementById('nc-name').value.trim();
   const email = document.getElementById('nc-email').value.trim();
   const pass = document.getElementById('nc-pass').value;
   if (!name || !email || pass.length < 6) { toast('Fill all fields (min 6-char password)', 'error'); return; }
-  const users = DB.getUsers();
-  if (users.find(u => u.email === email)) { toast('Email already registered', 'error'); return; }
-  users.push({ id: uid(), name, email, password: pass, role: 'cashier', createdAt: now() });
-  DB.saveUsers(users);
-  closeModal();
-  toast(`Cashier "${name}" created!`, 'success');
-  renderCashierAccountsList();
+  try {
+    await API.post('/api/admin/staff/cashiers', { name, email, password: pass });
+    await DB.refreshAdmin();
+    closeModal();
+    toast(`Cashier "${name}" created!`, 'success');
+    renderCashierAccountsList();
+  } catch (err) {
+    toast(err.message || 'Unable to create cashier', 'error');
+  }
 }
 
 function deleteCashier(id) {
@@ -955,18 +1206,25 @@ function deleteCashier(id) {
   `);
 }
 
-function confirmDeleteCashier(id) {
-  DB.saveUsers(DB.getUsers().filter(u => u.id !== id));
-  closeModal();
-  toast('Cashier removed', 'info');
-  renderCashierAccountsList();
+async function confirmDeleteCashier(id) {
+  try {
+    await API.delete(`/api/admin/staff/${id}`);
+    await DB.refreshAdmin();
+    closeModal();
+    toast('Cashier removed', 'info');
+    renderCashierAccountsList();
+  } catch (err) {
+    toast(err.message || 'Unable to remove cashier', 'error');
+  }
 }
 
 // ===== CASHIER POS TERMINAL =====
 let posCat = '';
 let posCart = [];
+let posCoupon = null;
 
-function loadCashier() {
+async function loadCashier(refresh = true) {
+  if (refresh) await DB.refreshCashier();
   const user = DB.getSession();
   document.getElementById('cashier-name').textContent = user.name;
   document.getElementById('cashier-avatar').textContent = user.name[0].toUpperCase();
@@ -1069,14 +1327,15 @@ function renderCashierOrders() {
     </div>`).join('');
 }
 
-function cashierUpdateStatus(id, status) {
-  const orders = DB.getOrders();
-  const o = orders.find(x => x.id === id);
-  if (!o) return;
-  o.status = status;
-  DB.saveOrders(orders);
-  toast(`Order marked as ${status}`, 'success');
-  renderCashierOrders();
+async function cashierUpdateStatus(id, status) {
+  try {
+    await API.put(`/api/cashier/orders/${id}/status`, { status });
+    await DB.refreshCashier();
+    toast(`Order marked as ${status}`, 'success');
+    renderCashierOrders();
+  } catch (err) {
+    toast(err.message || 'Unable to update order', 'error');
+  }
 }
 
 function cashierCancelOrder(id) {
@@ -1095,15 +1354,16 @@ function cashierCancelOrder(id) {
   `);
 }
 
-function confirmCashierCancel(id) {
-  const orders = DB.getOrders();
-  const o = orders.find(x => x.id === id);
-  if (!o) return;
-  o.status = 'Cancelled';
-  DB.saveOrders(orders);
-  closeModal();
-  toast('Order cancelled', 'info');
-  renderCashierOrders();
+async function confirmCashierCancel(id) {
+  try {
+    await API.post(`/api/cashier/orders/${id}/cancel`, {});
+    await DB.refreshCashier();
+    closeModal();
+    toast('Order cancelled', 'info');
+    renderCashierOrders();
+  } catch (err) {
+    toast(err.message || 'Unable to cancel order', 'error');
+  }
 }
 
 function posAddToCart(itemId) {
@@ -1125,12 +1385,25 @@ function posUpdateQty(itemId, delta) {
   renderPosCart();
 }
 
+function applyPosCoupon() {
+  const codeInp = document.getElementById('pos-promo')?.value.trim().toUpperCase() || '';
+  if (!codeInp) { posCoupon = null; renderPosCart(); return; }
+  const c = DB.getCoupons().find(x => x.code === codeInp && x.status === 'Active');
+  if (!c) { toast('Invalid or inactive coupon', 'error'); return; }
+  posCoupon = c;
+  toast('Coupon applied!', 'success');
+  renderPosCart();
+}
+
+function removePosCoupon() { posCoupon = null; renderPosCart(); }
+
 function renderPosCart() {
   const itemsEl = document.getElementById('pos-order-items');
   const footerEl = document.getElementById('pos-order-footer');
   if (!posCart.length) {
     itemsEl.innerHTML = '<div class="pos-empty-order"><i class="fas fa-shopping-bag"></i><p>Add items from the menu</p></div>';
     footerEl.innerHTML = '';
+    posCoupon = null;
     return;
   }
   itemsEl.innerHTML = posCart.map(c => `
@@ -1149,14 +1422,44 @@ function renderPosCart() {
     </div>`).join('');
 
   const subtotal = posCart.reduce((s, c) => s + c.price * c.qty, 0);
-  const tax = subtotal * 0.08;
-  const total = subtotal + tax;
+
+  let discount = 0;
+  if (posCoupon) {
+    let validSubtotal = 0;
+    posCart.forEach(c => {
+      if (!posCoupon.applicableCategory || c.category === posCoupon.applicableCategory) {
+        validSubtotal += c.price * c.qty;
+      }
+    });
+    if (validSubtotal >= (posCoupon.minOrderAttr || 0) && validSubtotal > 0) {
+      if (posCoupon.discountType === 'percentage') {
+        discount = validSubtotal * (posCoupon.discountValue / 100);
+      } else {
+        discount = Math.min(validSubtotal, posCoupon.discountValue);
+      }
+    } else {
+      if (posCoupon.minOrderAttr > validSubtotal) toast('Coupon requires ' + fmtPrice(posCoupon.minOrderAttr) + ' minimum', 'info');
+      posCoupon = null;
+    }
+  }
+
+  const tax = Math.max(0, subtotal - discount) * 0.08;
+  const total = Math.max(0, subtotal - discount) + tax;
+
   footerEl.innerHTML = `
     <div class="pos-totals">
       <div class="pos-total-row"><span>Subtotal</span><span>${fmtPrice(subtotal)}</span></div>
+      ${discount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>Discount (${posCoupon.code})</span><span>-${fmtPrice(discount)} <i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removePosCoupon()"></i></span></div>` : ''}
       <div class="pos-total-row"><span>Tax (8%)</span><span>${fmtPrice(tax)}</span></div>
       <div class="pos-total-row pos-grand-total"><span>TOTAL</span><span>${fmtPrice(total)}</span></div>
     </div>
+    
+    ${!posCoupon ? `
+      <div class="pos-pay-row" style="margin-top:-10px;margin-bottom:8px;display:flex;gap:6px">
+        <div class="inp-wrap" style="margin:0;flex:1"><i class="fas fa-tag"></i><input type="text" id="pos-promo" placeholder="Promo code" style="padding:6px 10px 6px 32px"></div>
+        <button class="btn-outline btn-sm" onclick="applyPosCoupon()">Apply</button>
+      </div>` : ''}
+
     <div class="pos-pay-row">
       <label style="font-size:.8rem;color:var(--text3)">Payment Method</label>
       <div class="inp-wrap" style="margin:6px 0 12px"><i class="fas fa-credit-card"></i>
@@ -1171,45 +1474,31 @@ function renderPosCart() {
   `;
 }
 
-function placePosOrder() {
+async function placePosOrder() {
   if (!posCart.length) { toast('Cart is empty', 'error'); return; }
   const customerName = document.getElementById('pos-customer').value.trim() || 'Walk-in Customer';
-  let customerId = 'walkin';
-
-  // Try to link to an existing customer
-  const users = DB.getUsers();
-  const existingCust = users.find(u => u.role === 'customer' && u.name.toLowerCase() === customerName.toLowerCase());
-  if (existingCust) customerId = existingCust.id;
-
   const payment = document.getElementById('pos-payment')?.value || 'Cash';
-  const cashier = DB.getSession();
-  const subtotal = posCart.reduce((s, c) => s + c.price * c.qty, 0);
-  const tax = subtotal * 0.08;
-  const total = subtotal + tax;
-  const order = {
-    id: uid(),
-    customerId,
-    customerName,
-    cashierId: cashier.id,
-    cashierName: cashier.name,
-    items: posCart.map(c => ({ id: c.id, name: c.name, icon: c.icon, price: c.price, qty: c.qty })),
-    subtotal, tax, total,
-    paymentMethod: payment,
-    deliveryAddress: 'In-store',
-    status: 'Preparing',
-    createdAt: now()
-  };
-  const orders = DB.getOrders();
-  orders.push(order);
-  DB.saveOrders(orders);
-  posCart = [];
-  document.getElementById('pos-customer').value = '';
-  renderPosCart();
-  toast(`Order placed for ${customerName}! 🎉`, 'success');
+  try {
+    await API.post('/api/cashier/orders', {
+      customerName,
+      couponCode: posCoupon ? posCoupon.code : null,
+      paymentMethod: payment,
+      items: posCart.map(c => ({ id: c.id, qty: c.qty }))
+    });
+    await DB.refreshCashier();
+    posCart = [];
+    posCoupon = null;
+    document.getElementById('pos-customer').value = '';
+    renderPosCart();
+    toast(`Order placed for ${customerName}! 🎉`, 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to place order', 'error');
+  }
 }
 
 function clearPosCart() {
   posCart = [];
+  posCoupon = null;
   renderPosCart();
 }
 
@@ -1256,19 +1545,21 @@ function showAddCashierCustomer() {
   `);
 }
 
-function saveCashierCustomer() {
+async function saveCashierCustomer() {
   const name = document.getElementById('nc-name').value.trim();
   const email = document.getElementById('nc-email').value.trim();
   const pass = document.getElementById('nc-pass').value;
   if (!name || !email || pass.length < 6) { toast('Fill all fields (min 6-char password)', 'error'); return; }
-  const users = DB.getUsers();
-  if (users.find(u => u.email === email)) { toast('Email already registered', 'error'); return; }
-  users.push({ id: uid(), name, email, password: pass, role: 'customer', createdAt: now() });
-  DB.saveUsers(users);
-  closeModal();
-  toast(`Customer "${name}" created!`, 'success');
-  renderCashierCustomersDL();
-  renderCashierCustomers();
+  try {
+    await API.post('/api/cashier/customers', { name, email, password: pass });
+    await DB.refreshCashier();
+    closeModal();
+    toast(`Customer "${name}" created!`, 'success');
+    renderCashierCustomersDL();
+    renderCashierCustomers();
+  } catch (err) {
+    toast(err.message || 'Unable to create customer', 'error');
+  }
 }
 
 function showEditCashierCustomer(id) {
@@ -1292,33 +1583,31 @@ function showEditCashierCustomer(id) {
   `);
 }
 
-function saveEditCashierCustomer(id) {
+async function saveEditCashierCustomer(id) {
   const name = document.getElementById('ecc-name').value.trim();
   const email = document.getElementById('ecc-email').value.trim();
   const pass = document.getElementById('ecc-pass').value;
   if (!name || !email) { toast('Name and email are required', 'error'); return; }
   if (pass && pass.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
-
-  const users = DB.getUsers();
-  const target = users.find(u => u.id === id);
-  if (!target || target.role !== 'customer') return;
-  if (users.find(u => u.email === email && u.id !== id)) { toast('Email already in use', 'error'); return; }
-
-  target.name = name;
-  target.email = email;
-  if (pass) target.password = pass;
-  DB.saveUsers(users);
-  closeModal();
-  toast(`Customer updated: ${name} ✅`, 'success');
-  renderCashierCustomersDL();
-  renderCashierCustomers();
+  try {
+    await API.put(`/api/cashier/customers/${id}`, { name, email, password: pass || null });
+    await DB.refreshCashier();
+    closeModal();
+    toast(`Customer updated: ${name} ✅`, 'success');
+    renderCashierCustomersDL();
+    renderCashierCustomers();
+  } catch (err) {
+    toast(err.message || 'Unable to update customer', 'error');
+  }
 }
 
 // ===== CUSTOMER =====
 
 let activeCat = '';
+let custCoupon = null;
 
-function loadCustomer() {
+async function loadCustomer(refresh = true) {
+  if (refresh) await DB.refreshCustomer();
   const user = DB.getSession();
   document.getElementById('cust-name').textContent = user.name;
   document.getElementById('cust-avatar').textContent = user.name[0].toUpperCase();
@@ -1368,16 +1657,16 @@ function renderCustMenu() {
     </div>`).join('');
 }
 
-function addToCart(itemId) {
+async function addToCart(itemId) {
   const item = DB.getItems().find(i => i.id === itemId);
   if (!item) return;
-  const cart = DB.getCart();
-  const ex = cart.find(c => c.id === itemId);
-  if (ex) ex.qty++;
-  else cart.push({ id: item.id, name: item.name, price: item.price, category: item.category, icon: item.icon, qty: 1 });
-  DB.saveCart(cart);
-  updateCartBadge();
-  toast(`${item.name} added to cart!`, 'success');
+  try {
+    syncCustomerCart(await API.post('/api/customer/cart/items', { menuItemId: itemId, quantity: 1 }));
+    refreshCustomerCartViews();
+    toast(`${item.name} added to cart!`, 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to add item to cart', 'error');
+  }
 }
 
 function updateCartBadge() {
@@ -1385,8 +1674,38 @@ function updateCartBadge() {
   document.getElementById('cart-count').textContent = total;
 }
 
+async function applyCustCoupon() {
+  const codeInp = document.getElementById('cust-promo')?.value.trim().toUpperCase() || '';
+  if (!codeInp) {
+    if (!state.cart.couponCode) {
+      custCoupon = null;
+      renderCart();
+      return;
+    }
+    await removeCustCoupon();
+    return;
+  }
+  try {
+    syncCustomerCart(await API.post('/api/customer/cart/coupon', { code: codeInp }));
+    refreshCustomerCartViews();
+    toast('Coupon applied!', 'success');
+  } catch (err) {
+    toast(err.message || 'Invalid or inactive coupon', 'error');
+  }
+}
+
+async function removeCustCoupon() {
+  try {
+    syncCustomerCart(await API.delete('/api/customer/cart/coupon'));
+    refreshCustomerCartViews();
+  } catch (err) {
+    toast(err.message || 'Unable to remove coupon', 'error');
+  }
+}
+
 function renderCart() {
-  const cart = DB.getCart();
+  const cartState = state.cart || emptyCart();
+  const cart = cartState.items || [];
   const container = document.getElementById('cart-items');
   if (!cart.length) {
     container.innerHTML = '<div class="empty-state"><i class="fas fa-shopping-cart"></i><p>Your cart is empty. Go add some food!</p></div>';
@@ -1411,54 +1730,62 @@ function renderCart() {
       <button class="btn-icon danger" onclick="removeCartItem('${c.id}')" style="margin-left:8px"><i class="fas fa-trash"></i></button>
     </div>`).join('');
 
-  const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  const delivery = subtotal > 0 ? 1.99 : 0;
-  const tax = subtotal * 0.08;
-  const total = subtotal + delivery + tax;
-
   document.getElementById('cart-summary-lines').innerHTML = `
-    <div class="summary-line"><span>Subtotal</span><span>${fmtPrice(subtotal)}</span></div>
-    <div class="summary-line"><span>Delivery Fee</span><span>${fmtPrice(delivery)}</span></div>
-    <div class="summary-line"><span>Tax (8%)</span><span>${fmtPrice(tax)}</span></div>
+    <div class="summary-line"><span>Subtotal</span><span>${fmtPrice(cartState.subtotal)}</span></div>
+    ${cartState.discount > 0 ? `<div class="summary-line" style="color:var(--yellow)"><span>Discount (${cartState.couponCode || custCoupon?.code})</span><span>-${fmtPrice(cartState.discount)} <i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removeCustCoupon()"></i></span></div>` : ''}
+    <div class="summary-line"><span>Delivery Fee</span><span>${fmtPrice(cartState.delivery)}</span></div>
+    <div class="summary-line"><span>Tax (8%)</span><span>${fmtPrice(cartState.tax)}</span></div>
   `;
-  document.getElementById('cart-total').innerHTML = `<span>Total</span><span>${fmtPrice(total)}</span>`;
+
+  const totalHtml = `
+    ${!cartState.couponCode ? `
+    <div style="display:flex;gap:6px;margin-bottom:12px;font-weight:400;font-size:.9rem">
+      <div class="inp-wrap" style="margin:0;flex:1"><i class="fas fa-tag"></i><input type="text" id="cust-promo" placeholder="Promo code" style="padding:6px 10px 6px 32px"></div>
+      <button class="btn-outline btn-sm" onclick="applyCustCoupon()">Apply</button>
+    </div>` : ''}
+    <div style="display:flex;justify-content:space-between;width:100%"><span>Total</span><span>${fmtPrice(cartState.total)}</span></div>
+  `;
+  document.getElementById('cart-total').innerHTML = totalHtml;
 }
 
-function changeQty(id, delta) {
-  let cart = DB.getCart();
-  const item = cart.find(c => c.id === id);
+async function changeQty(id, delta) {
+  const item = DB.getCart().find(c => c.id === id);
   if (!item) return;
-  item.qty += delta;
-  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
-  DB.saveCart(cart);
-  updateCartBadge();
-  renderCart();
+  try {
+    const cart = item.qty + delta <= 0
+      ? await API.delete(`/api/customer/cart/items/${id}`)
+      : await API.patch(`/api/customer/cart/items/${id}`, { quantity: item.qty + delta });
+    syncCustomerCart(cart);
+    refreshCustomerCartViews();
+  } catch (err) {
+    toast(err.message || 'Unable to update cart', 'error');
+  }
 }
 
-function removeCartItem(id) {
-  DB.saveCart(DB.getCart().filter(c => c.id !== id));
-  updateCartBadge();
-  renderCart();
-  toast('Item removed from cart', 'info');
+async function removeCartItem(id) {
+  try {
+    syncCustomerCart(await API.delete(`/api/customer/cart/items/${id}`));
+    refreshCustomerCartViews();
+    toast('Item removed from cart', 'info');
+  } catch (err) {
+    toast(err.message || 'Unable to remove item', 'error');
+  }
 }
 
 function renderCheckout() {
   const user = DB.getSession();
   document.getElementById('co-name').value = user.name;
-  const cart = DB.getCart();
+  const cartState = state.cart || emptyCart();
+  const cart = cartState.items || [];
   if (!cart.length) { custNav('cart'); return; }
-
-  const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  const delivery = 1.99;
-  const tax = subtotal * 0.08;
-  const total = subtotal + delivery + tax;
 
   document.getElementById('co-items').innerHTML = [
     ...cart.map(c => `<div class="co-item-row"><span>${c.icon} ${c.name} ×${c.qty}</span><span>${fmtPrice(c.price * c.qty)}</span></div>`),
-    `<div class="co-item-row"><span>Delivery</span><span>${fmtPrice(delivery)}</span></div>`,
-    `<div class="co-item-row"><span>Tax</span><span>${fmtPrice(tax)}</span></div>`
+    cartState.discount > 0 ? `<div class="co-item-row" style="color:var(--yellow)"><span>Discount (${cartState.couponCode || custCoupon?.code})</span><span>-${fmtPrice(cartState.discount)}</span></div>` : '',
+    `<div class="co-item-row"><span>Delivery</span><span>${fmtPrice(cartState.delivery)}</span></div>`,
+    `<div class="co-item-row"><span>Tax</span><span>${fmtPrice(cartState.tax)}</span></div>`
   ].join('');
-  document.getElementById('co-total').innerHTML = `<span>Total</span><span>${fmtPrice(total)}</span>`;
+  document.getElementById('co-total').innerHTML = `<span>Total</span><span>${fmtPrice(cartState.total)}</span>`;
 }
 
 function switchPayment(radio) {
@@ -1473,8 +1800,7 @@ function fmtCard(inp) {
   inp.value = v.replace(/(.{4})/g, '$1 ').trim();
 }
 
-function placeOrder() {
-  const user = DB.getSession();
+async function placeOrder() {
   const cart = DB.getCart();
   const name = document.getElementById('co-name').value.trim();
   const phone = document.getElementById('co-phone').value.trim();
@@ -1490,27 +1816,38 @@ function placeOrder() {
     const exp = document.getElementById('co-expiry').value;
     const cvv = document.getElementById('co-cvv').value;
     if (card.length < 16 || !exp || cvv.length < 3) { toast('Please enter valid card details', 'error'); return; }
+    try {
+      await API.post('/api/customer/orders', {
+        deliveryName: name,
+        phone,
+        address,
+        paymentMethod: payMethod,
+        cardNumber: card,
+        expiry: exp,
+        cvv
+      });
+      await DB.refreshCustomer();
+      toast('Order placed successfully! 🎉', 'success');
+      custNav('orders');
+    } catch (err) {
+      toast(err.message || 'Unable to place order', 'error');
+    }
+    return;
   }
 
-  const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  const delivery = 1.99;
-  const tax = subtotal * 0.08;
-  const total = subtotal + delivery + tax;
-
-  const order = {
-    id: uid(), customerId: user.id, customerName: user.name,
-    items: cart.map(c => ({ itemId: c.id, name: c.name, icon: c.icon, price: c.price, qty: c.qty })),
-    subtotal, delivery, tax, total, paymentMethod: payMethod,
-    deliveryName: name, phone, address, status: 'Preparing', createdAt: now()
-  };
-  const orders = DB.getOrders();
-  orders.push(order);
-  DB.saveOrders(orders);
-  DB.clearCart();
-  updateCartBadge();
-
-  toast('Order placed successfully! 🎉', 'success');
-  custNav('orders');
+  try {
+    await API.post('/api/customer/orders', {
+      deliveryName: name,
+      phone,
+      address,
+      paymentMethod: payMethod
+    });
+    await DB.refreshCustomer();
+    toast('Order placed successfully! 🎉', 'success');
+    custNav('orders');
+  } catch (err) {
+    toast(err.message || 'Unable to place order', 'error');
+  }
 }
 
 function renderCustOrders() {
@@ -1576,28 +1913,30 @@ function renderCustFeedback() {
     </div>`).join('');
 }
 
-function submitFeedback() {
-  const user = DB.getSession();
+async function submitFeedback() {
   const orderId = document.getElementById('fb-order').value;
   const comment = document.getElementById('fb-comment').value.trim();
   if (!orderId) { toast('Please select an order', 'error'); return; }
   if (!currentRating) { toast('Please select a rating', 'error'); return; }
-  const order = DB.getOrders().find(o => o.id === orderId);
-  const fb = DB.getFeedback();
-  fb.push({ id: uid(), customerId: user.id, customerName: user.name, orderId, orderRef: '#' + orderId.slice(-6).toUpperCase(), rating: currentRating, comment, createdAt: now() });
-  DB.saveFeedback(fb);
-  toast('Thank you for your feedback! ⭐', 'success');
-  document.getElementById('fb-comment').value = '';
-  renderCustFeedback();
+  try {
+    await API.post('/api/customer/feedback', { orderId, rating: currentRating, comment });
+    await DB.refreshCustomer();
+    toast('Thank you for your feedback! ⭐', 'success');
+    document.getElementById('fb-comment').value = '';
+    renderCustFeedback();
+  } catch (err) {
+    toast(err.message || 'Unable to submit feedback', 'error');
+  }
 }
 
 // ===== BOOT =====
-document.addEventListener('DOMContentLoaded', () => {
-  DB.init();
+document.addEventListener('DOMContentLoaded', async () => {
+  await DB.init();
   const session = DB.getSession();
   if (session) {
-    if (session.role === 'admin') loadAdmin();
-    else loadCustomer();
+    if (session.role === 'admin') await loadAdmin(false);
+    else if (session.role === 'cashier') await loadCashier(false);
+    else await loadCustomer(false);
   } else {
     showPage('page-auth');
   }

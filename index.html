@@ -151,6 +151,7 @@
           Customers</a>
         <a class="nav-item" id="nav-feedback" onclick="adminNav('feedback')"><i class="fas fa-comments"></i>
           Feedback</a>
+        <a class="nav-item" id="nav-coupons" onclick="adminNav('coupons')"><i class="fas fa-tags"></i> Coupons</a>
         <a class="nav-item" id="nav-settings" onclick="adminNav('settings')"><i class="fas fa-cog"></i> Settings</a>
       </nav>
       <div class="sidebar-footer">
@@ -269,6 +270,31 @@
           </div>
         </div>
         <div id="admin-feedback-list"></div>
+      </section>
+
+      <!-- COUPONS -->
+      <section id="sec-coupons" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Coupons</h2>
+            <p>Manage discount codes and promotional offers.</p>
+          </div>
+          <button class="btn-primary" onclick="showAddCouponModal()"><i class="fas fa-plus"></i> Add Coupon</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Discount</th>
+                <th>Conditions</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-coupons-tbody"></tbody>
+          </table>
+        </div>
       </section>
 
       <!-- SETTINGS -->

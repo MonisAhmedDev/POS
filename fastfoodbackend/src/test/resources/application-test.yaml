@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:fastbite;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+app:
+  security:
+    access-token-minutes: 15
+    refresh-token-days: 7
+    secure-cookies: false
+    jwt-secret: test-secret-test-secret-test-secret-test-secret
+  storage:
+    upload-dir: ${java.io.tmpdir}/fastbite-test-uploads
+  bootstrap-admin:
+    name: FastBite Admin
+    email: admin@fastfood.com
+    password: admin123
