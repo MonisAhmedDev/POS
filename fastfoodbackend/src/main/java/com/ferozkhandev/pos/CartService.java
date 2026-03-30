@@ -26,6 +26,7 @@ public class CartService {
 
     public CartResponse addItem(UserAccount user, CartItemRequest request) {
         Cart cart = getOrCreateCart(user);
+        ValidationRules.requireQuantity(request.quantity());
         MenuItem menuItem = catalogService.getMenuItem(request.menuItemId());
         CartItem existing = cart.getItems().stream()
             .filter(item -> item.getMenuItem().getId().equals(menuItem.getId()))
@@ -38,7 +39,9 @@ public class CartService {
             item.setQuantity(request.quantity());
             cart.getItems().add(item);
         } else {
-            existing.setQuantity(existing.getQuantity() + request.quantity());
+            int quantity = existing.getQuantity() + request.quantity();
+            ValidationRules.requireQuantity(quantity);
+            existing.setQuantity(quantity);
         }
         normalizeCoupon(cart);
         cartRepository.save(cart);
@@ -47,6 +50,7 @@ public class CartService {
 
     public CartResponse updateItem(UserAccount user, String menuItemId, QuantityUpdateRequest request) {
         Cart cart = getOrCreateCart(user);
+        ValidationRules.requireQuantity(request.quantity());
         CartItem item = cart.getItems().stream()
             .filter(entry -> entry.getMenuItem().getId().equals(menuItemId))
             .findFirst()
@@ -97,14 +101,14 @@ public class CartService {
     }
 
     public CartTotals totals(Cart cart) {
-        return pricingService.calculate(lines(cart), cart.getCoupon(), true);
+        return pricingService.calculate(lines(cart), cart.getCoupon(), cart.getUser(), true);
     }
 
     private List<PricingLineItem> lines(Cart cart) {
         return cart.getItems().stream()
             .map(item -> new PricingLineItem(
                 item.getMenuItem().getCategory(),
-                item.getMenuItem().getPrice(),
+                MoneyUtils.subtractDiscount(item.getMenuItem().getPrice(), item.getMenuItem().getDiscount()),
                 item.getQuantity()
             ))
             .toList();

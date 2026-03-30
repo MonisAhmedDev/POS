@@ -18,4 +18,9 @@ final class MoneyUtils {
     static BigDecimal multiply(BigDecimal left, int quantity) {
         return money(left.multiply(BigDecimal.valueOf(quantity)));
     }
+
+    static BigDecimal subtractDiscount(BigDecimal price, BigDecimal discount) {
+        BigDecimal safeDiscount = discount != null ? discount : ZERO;
+        return money(price.subtract(safeDiscount).max(ZERO));
+    }
 }

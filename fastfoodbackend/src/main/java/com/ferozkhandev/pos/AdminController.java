@@ -42,6 +42,11 @@ public class AdminController {
         return orderService.updateStatus(orderId, request.status());
     }
 
+    @PutMapping("/orders/{orderId}")
+    OrderResponse updateOrder(@PathVariable String orderId, @Valid @RequestBody PosOrderRequest request) {
+        return orderService.updateAdminOrder(orderId, request);
+    }
+
     @PutMapping("/orders/{orderId}/paid")
     OrderResponse updateOrderPaidStatus(@PathVariable String orderId, @Valid @RequestBody OrderPaidUpdateRequest request) {
         return orderService.updatePaidStatus(orderId, request.paid());
@@ -55,6 +60,11 @@ public class AdminController {
     @DeleteMapping("/customers/{customerId}")
     void deleteCustomer(@PathVariable String customerId) {
         userManagementService.deleteCustomer(customerId);
+    }
+
+    @PutMapping("/customers/{customerId}/discount")
+    AdminAccountResponse updateCustomerDiscount(@PathVariable String customerId, @Valid @RequestBody CustomerDiscountUpdateRequest request) {
+        return userManagementService.updateCustomerDiscount(customerId, request);
     }
 
     @GetMapping("/feedback")

@@ -41,6 +41,8 @@ public class BackupService {
                 user.getPasswordHash(),
                 user.getRole().name().toLowerCase(),
                 user.isSuperAdmin(),
+                user.getRestaurantDiscountType() != null ? user.getRestaurantDiscountType().name().toLowerCase() : null,
+                user.getRestaurantDiscountValue(),
                 user.getCreatedAt()
             ))
             .toList();
@@ -127,6 +129,12 @@ public class BackupService {
             user.setPasswordHash(record.passwordHash());
             user.setRole(Role.valueOf(record.role().toUpperCase()));
             user.setSuperAdmin(record.isSuperAdmin());
+            user.setRestaurantDiscountType(record.restaurantDiscountType() != null
+                ? DiscountType.valueOf(record.restaurantDiscountType().toUpperCase())
+                : null);
+            user.setRestaurantDiscountValue(record.restaurantDiscountValue() != null
+                ? record.restaurantDiscountValue()
+                : java.math.BigDecimal.ZERO);
             usersById.put(user.getId(), userAccountRepository.save(user));
         });
 

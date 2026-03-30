@@ -17,11 +17,13 @@ public class PricingService {
         this.settingsService = settingsService;
     }
 
-    public CartTotals calculate(List<PricingLineItem> items, Coupon coupon, boolean includeDelivery) {
+    public CartTotals calculate(List<PricingLineItem> items, Coupon coupon, UserAccount customer, boolean includeDelivery) {
         BigDecimal subtotal = items.stream()
             .map(item -> MoneyUtils.multiply(item.price(), item.quantity()))
             .reduce(MoneyUtils.ZERO, BigDecimal::add);
-        BigDecimal discount = calculateDiscount(items, coupon, false);
+        BigDecimal customerDiscount = calculateCustomerDiscount(subtotal, customer);
+        BigDecimal couponDiscount = calculateDiscount(items, coupon, false);
+        BigDecimal discount = MoneyUtils.money(customerDiscount.add(couponDiscount).min(subtotal));
         BigDecimal delivery = includeDelivery && subtotal.compareTo(MoneyUtils.ZERO) > 0 ? MoneyUtils.DELIVERY_FEE : MoneyUtils.ZERO;
         BigDecimal taxable = subtotal.subtract(discount).max(MoneyUtils.ZERO);
         BigDecimal tax = MoneyUtils.money(taxable.multiply(settingsService.getTaxRate()));
@@ -31,6 +33,20 @@ public class PricingService {
 
     public void validateCoupon(List<PricingLineItem> items, Coupon coupon) {
         calculateDiscount(items, coupon, true);
+    }
+
+    private BigDecimal calculateCustomerDiscount(BigDecimal subtotal, UserAccount customer) {
+        if (customer == null || customer.getRestaurantDiscountType() == null) {
+            return MoneyUtils.ZERO;
+        }
+        BigDecimal value = customer.getRestaurantDiscountValue() != null ? customer.getRestaurantDiscountValue() : MoneyUtils.ZERO;
+        if (value.compareTo(MoneyUtils.ZERO) <= 0 || subtotal.compareTo(MoneyUtils.ZERO) <= 0) {
+            return MoneyUtils.ZERO;
+        }
+        BigDecimal discount = customer.getRestaurantDiscountType() == DiscountType.PERCENTAGE
+            ? subtotal.multiply(value).divide(new BigDecimal("100"))
+            : subtotal.min(value);
+        return MoneyUtils.money(discount);
     }
 
     private BigDecimal calculateDiscount(List<PricingLineItem> items, Coupon coupon, boolean strict) {

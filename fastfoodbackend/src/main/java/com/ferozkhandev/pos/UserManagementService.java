@@ -1,5 +1,6 @@
 package com.ferozkhandev.pos;
 
+import com.ferozkhandev.pos.DomainEnums.DiscountType;
 import com.ferozkhandev.pos.DomainEnums.Role;
 import java.math.BigDecimal;
 import java.util.List;
@@ -53,6 +54,16 @@ public class UserManagementService {
             }
             user.setPasswordHash(passwordEncoder.encode(request.password()));
         }
+        return apiMapper.toAccount(userAccountRepository.save(user));
+    }
+
+    public AdminAccountResponse updateCustomerDiscount(String userId, CustomerDiscountUpdateRequest request) {
+        UserAccount user = userAccountRepository.findById(userId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found."));
+        if (user.getRole() != Role.CUSTOMER) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only customers can receive restaurant discounts.");
+        }
+        applyRestaurantDiscount(user, request.discountType(), request.discountValue());
         return apiMapper.toAccount(userAccountRepository.save(user));
     }
 
@@ -166,6 +177,26 @@ public class UserManagementService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(role);
         user.setSuperAdmin(superAdmin);
+        user.setRestaurantDiscountValue(MoneyUtils.ZERO);
         return userAccountRepository.save(user);
+    }
+
+    private void applyRestaurantDiscount(UserAccount user, String discountType, BigDecimal discountValue) {
+        BigDecimal value = discountValue != null ? MoneyUtils.money(discountValue.max(BigDecimal.ZERO)) : MoneyUtils.ZERO;
+        if (!StringUtils.hasText(discountType) || "none".equalsIgnoreCase(discountType) || value.compareTo(MoneyUtils.ZERO) <= 0) {
+            user.setRestaurantDiscountType(null);
+            user.setRestaurantDiscountValue(MoneyUtils.ZERO);
+            return;
+        }
+        user.setRestaurantDiscountType(parseDiscountType(discountType));
+        user.setRestaurantDiscountValue(value);
+    }
+
+    private DiscountType parseDiscountType(String value) {
+        return switch (value.toLowerCase()) {
+            case "percentage" -> DiscountType.PERCENTAGE;
+            case "fixed" -> DiscountType.FIXED;
+            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported discount type");
+        };
     }
 }

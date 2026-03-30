@@ -100,7 +100,7 @@ public class ApiMapper {
             .map(item -> new CartItemResponse(
                 item.getMenuItem().getId(),
                 item.getMenuItem().getName(),
-                MoneyUtils.money(item.getMenuItem().getPrice()),
+                MoneyUtils.subtractDiscount(item.getMenuItem().getPrice(), item.getMenuItem().getDiscount()),
                 item.getMenuItem().getCategory(),
                 item.getMenuItem().getIcon(),
                 item.getQuantity()
@@ -124,6 +124,8 @@ public class ApiMapper {
             user.getEmail(),
             user.getRole().name().toLowerCase(),
             user.isSuperAdmin(),
+            user.getRestaurantDiscountType() != null ? user.getRestaurantDiscountType().name().toLowerCase() : null,
+            MoneyUtils.money(user.getRestaurantDiscountValue() != null ? user.getRestaurantDiscountValue() : MoneyUtils.ZERO),
             user.getCreatedAt()
         );
     }
@@ -140,6 +142,8 @@ public class ApiMapper {
             customer.getName(),
             customer.getEmail(),
             customer.getCreatedAt(),
+            customer.getRestaurantDiscountType() != null ? customer.getRestaurantDiscountType().name().toLowerCase() : null,
+            MoneyUtils.money(customer.getRestaurantDiscountValue() != null ? customer.getRestaurantDiscountValue() : MoneyUtils.ZERO),
             orders.size(),
             MoneyUtils.money(totalSpent),
             averageRating.setScale(1, RoundingMode.HALF_UP),

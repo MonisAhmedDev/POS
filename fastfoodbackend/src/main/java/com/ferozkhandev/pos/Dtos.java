@@ -117,12 +117,12 @@ record CouponResponse(
 
 record CartItemRequest(
     @NotBlank String menuItemId,
-    @Min(1) int quantity
+    @Min(1) @Max(ValidationRules.MAX_ITEM_QUANTITY) int quantity
 ) {
 }
 
 record QuantityUpdateRequest(
-    @Min(1) int quantity
+    @Min(1) @Max(ValidationRules.MAX_ITEM_QUANTITY) int quantity
 ) {
 }
 
@@ -165,7 +165,7 @@ record CheckoutRequest(
 
 record PosOrderItemRequest(
     @NotBlank String id,
-    @Min(1) int qty
+    @Min(1) @Max(ValidationRules.MAX_ITEM_QUANTITY) int qty
 ) {
 }
 
@@ -205,6 +205,8 @@ record AdminAccountResponse(
     String email,
     String role,
     boolean isSuperAdmin,
+    String restaurantDiscountType,
+    BigDecimal restaurantDiscountValue,
     Instant createdAt
 ) {
 }
@@ -223,11 +225,19 @@ record StaffUpdateRequest(
 ) {
 }
 
+record CustomerDiscountUpdateRequest(
+    @NotBlank String discountType,
+    @NotNull BigDecimal discountValue
+) {
+}
+
 record CustomerSummaryResponse(
     String id,
     String name,
     String email,
     Instant createdAt,
+    String restaurantDiscountType,
+    BigDecimal restaurantDiscountValue,
     int orderCount,
     BigDecimal totalSpent,
     BigDecimal averageRating,
@@ -308,6 +318,8 @@ record BackupUserRecord(
     String passwordHash,
     String role,
     boolean isSuperAdmin,
+    String restaurantDiscountType,
+    BigDecimal restaurantDiscountValue,
     Instant createdAt
 ) {
 }
@@ -317,6 +329,7 @@ record BackupMenuItemRecord(
     String name,
     String category,
     BigDecimal price,
+    BigDecimal discount,
     String description,
     String icon,
     boolean available,

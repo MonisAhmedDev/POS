@@ -1,11 +1,13 @@
 package com.ferozkhandev.pos;
 
+import com.ferozkhandev.pos.DomainEnums.DiscountType;
 import com.ferozkhandev.pos.DomainEnums.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -32,4 +34,11 @@ public class UserAccount extends BaseEntity {
 
     @Column(name = "super_admin", nullable = false)
     private boolean superAdmin;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "restaurant_discount_type", length = 32)
+    private DiscountType restaurantDiscountType;
+
+    @Column(name = "restaurant_discount_value", nullable = false, precision = 10, scale = 2)
+    private BigDecimal restaurantDiscountValue = BigDecimal.ZERO;
 }

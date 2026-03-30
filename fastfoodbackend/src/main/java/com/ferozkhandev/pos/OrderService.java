@@ -63,22 +63,20 @@ public class OrderService {
     }
 
     public OrderResponse createPosOrder(UserAccount cashier, PosOrderRequest request) {
-        List<MenuItemQuantity> items = request.items().stream()
-            .map(item -> new MenuItemQuantity(catalogService.getMenuItem(item.id()), item.qty()))
-            .toList();
+        List<MenuItemQuantity> items = resolveItems(request.items());
         if (items.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cart is empty");
         }
         Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
+        UserAccount customer = findCustomerByName(request.customerName());
         List<PricingLineItem> pricingItems = items.stream()
-            .map(item -> new PricingLineItem(item.menuItem().getCategory(), item.menuItem().getPrice(), item.quantity()))
+            .map(item -> new PricingLineItem(item.menuItem().getCategory(), effectivePrice(item.menuItem()), item.quantity()))
             .toList();
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        CartTotals totals = pricingService.calculate(pricingItems, coupon, false);
+        CartTotals totals = pricingService.calculate(pricingItems, coupon, customer, false);
         String customerName = StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Walk-in Customer";
-        UserAccount customer = userAccountRepository.findByNameIgnoreCaseAndRole(customerName, Role.CUSTOMER).orElse(null);
 
         ShopOrder order = new ShopOrder();
         order.setCustomer(customer);
@@ -98,6 +96,50 @@ public class OrderService {
         order.setStatus(OrderStatus.PREPARING);
         order.setItems(new ArrayList<>());
         items.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
+        return apiMapper.toOrder(shopOrderRepository.save(order));
+    }
+
+    public OrderResponse updateAdminOrder(String orderId, PosOrderRequest request) {
+        ShopOrder order = shopOrderRepository.findById(orderId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Order not found."));
+        if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.CANCELLED) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only active orders can be edited.");
+        }
+        List<MenuItemQuantity> newItems = resolveItems(request.items());
+        if (newItems.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cart is empty.");
+        }
+        Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
+        UserAccount customer = order.getCustomer() != null ? order.getCustomer() : findCustomerByName(request.customerName());
+        List<PricingLineItem> pricingItems = newItems.stream()
+            .map(item -> new PricingLineItem(item.menuItem().getCategory(), effectivePrice(item.menuItem()), item.quantity()))
+            .toList();
+        if (coupon != null) {
+            pricingService.validateCoupon(pricingItems, coupon);
+        }
+        CartTotals totals = pricingService.calculate(pricingItems, coupon, customer, includesDelivery(order));
+        order.setCustomer(customer);
+        if (customer != null) {
+            order.setCustomerName(customer.getName());
+            if (!StringUtils.hasText(order.getDeliveryName()) || !includesDelivery(order)) {
+                order.setDeliveryName(customer.getName());
+            }
+        } else if (StringUtils.hasText(request.customerName())) {
+            String customerName = request.customerName().trim();
+            order.setCustomerName(customerName);
+            if (!includesDelivery(order)) {
+                order.setDeliveryName(customerName);
+            }
+        }
+        order.setSubtotal(totals.subtotal());
+        order.setDiscount(totals.discount());
+        order.setDelivery(totals.delivery());
+        order.setTax(totals.tax());
+        order.setTotal(totals.total());
+        order.setCouponCode(coupon != null ? coupon.getCode() : null);
+        order.setPaymentMethod(parsePaymentMethod(request.paymentMethod()));
+        order.getItems().clear();
+        newItems.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
         return apiMapper.toOrder(shopOrderRepository.save(order));
     }
 
@@ -137,22 +179,29 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.PREPARING) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Only orders in Preparing status can be edited.");
         }
-        List<MenuItemQuantity> newItems = request.items().stream()
-            .map(item -> new MenuItemQuantity(catalogService.getMenuItem(item.id()), item.qty()))
-            .toList();
+        List<MenuItemQuantity> newItems = resolveItems(request.items());
         if (newItems.isEmpty()) throw new ApiException(HttpStatus.BAD_REQUEST, "Cart is empty.");
         Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
+        UserAccount customer = findCustomerByName(request.customerName());
         List<PricingLineItem> pricingItems = newItems.stream()
-            .map(item -> new PricingLineItem(item.menuItem().getCategory(), item.menuItem().getPrice(), item.quantity()))
+            .map(item -> new PricingLineItem(item.menuItem().getCategory(), effectivePrice(item.menuItem()), item.quantity()))
             .toList();
-        CartTotals totals = pricingService.calculate(pricingItems, coupon, false);
+        if (coupon != null) {
+            pricingService.validateCoupon(pricingItems, coupon);
+        }
+        CartTotals totals = pricingService.calculate(pricingItems, coupon, customer, false);
+        order.setCustomer(customer);
+        order.setCustomerName(customer != null ? customer.getName() : (StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Walk-in Customer"));
         order.setSubtotal(totals.subtotal());
         order.setDiscount(totals.discount());
+        order.setDelivery(totals.delivery());
         order.setTax(totals.tax());
         order.setTotal(totals.total());
         order.setCouponCode(coupon != null ? coupon.getCode() : null);
+        order.setPaymentMethod(parsePaymentMethod(request.paymentMethod()));
         order.setCashier(cashier);
         order.setCashierName(cashier.getName());
+        order.setDeliveryName(order.getCustomerName());
         order.getItems().clear();
         newItems.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
         return apiMapper.toOrder(shopOrderRepository.save(order));
@@ -187,9 +236,33 @@ public class OrderService {
         item.setName(menuItem.getName());
         item.setCategory(menuItem.getCategory());
         item.setIcon(menuItem.getIcon());
-        item.setPrice(MoneyUtils.money(menuItem.getPrice()));
+        item.setPrice(effectivePrice(menuItem));
         item.setQuantity(quantity);
         return item;
+    }
+
+    private List<MenuItemQuantity> resolveItems(List<PosOrderItemRequest> requestItems) {
+        return requestItems.stream()
+            .map(item -> {
+                ValidationRules.requireQuantity(item.qty());
+                return new MenuItemQuantity(catalogService.getMenuItem(item.id()), item.qty());
+            })
+            .toList();
+    }
+
+    private UserAccount findCustomerByName(String customerName) {
+        if (!StringUtils.hasText(customerName)) {
+            return null;
+        }
+        return userAccountRepository.findByNameIgnoreCaseAndRole(customerName.trim(), Role.CUSTOMER).orElse(null);
+    }
+
+    private BigDecimal effectivePrice(MenuItem menuItem) {
+        return MoneyUtils.subtractDiscount(menuItem.getPrice(), menuItem.getDiscount());
+    }
+
+    private boolean includesDelivery(ShopOrder order) {
+        return order.getDelivery() != null && order.getDelivery().compareTo(MoneyUtils.ZERO) > 0;
     }
 
     private PaymentMethod parsePaymentMethod(String value) {
