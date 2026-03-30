@@ -11,6 +11,12 @@ import org.springframework.util.StringUtils;
 @Service
 public class PricingService {
 
+    private final SettingsService settingsService;
+
+    public PricingService(SettingsService settingsService) {
+        this.settingsService = settingsService;
+    }
+
     public CartTotals calculate(List<PricingLineItem> items, Coupon coupon, boolean includeDelivery) {
         BigDecimal subtotal = items.stream()
             .map(item -> MoneyUtils.multiply(item.price(), item.quantity()))
@@ -18,7 +24,7 @@ public class PricingService {
         BigDecimal discount = calculateDiscount(items, coupon, false);
         BigDecimal delivery = includeDelivery && subtotal.compareTo(MoneyUtils.ZERO) > 0 ? MoneyUtils.DELIVERY_FEE : MoneyUtils.ZERO;
         BigDecimal taxable = subtotal.subtract(discount).max(MoneyUtils.ZERO);
-        BigDecimal tax = MoneyUtils.money(taxable.multiply(MoneyUtils.TAX_RATE));
+        BigDecimal tax = MoneyUtils.money(taxable.multiply(settingsService.getTaxRate()));
         BigDecimal total = MoneyUtils.money(taxable.add(delivery).add(tax));
         return new CartTotals(MoneyUtils.money(subtotal), discount, delivery, tax, total);
     }

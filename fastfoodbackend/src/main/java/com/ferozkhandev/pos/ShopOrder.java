@@ -75,6 +75,9 @@ public class ShopOrder extends BaseEntity {
     @Column(nullable = false, length = 32)
     private OrderStatus status;
 
+    @Column(nullable = false)
+    private boolean paid;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 }

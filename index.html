@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FastBite — Fast Food Shop</title>
+  <title>Punjabi Cafe — Fast Food Shop</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
     rel="stylesheet">
@@ -53,8 +53,8 @@
     <div class="auth-container">
       <div class="auth-left">
         <div class="auth-brand">
-          <div class="auth-logo-icon">🍔</div>
-          <h1>FastBite</h1>
+          <img src="logo.jpg" alt="Punjabi Cafe Logo" style="height: 80px; margin-bottom: 10px; border-radius: 8px;">
+          <h1>Punjabi Cafe</h1>
           <p>Premium Fast Food Management</p>
         </div>
         <div class="auth-features">
@@ -138,8 +138,8 @@
   <div id="page-admin" class="page hidden">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <span class="sb-icon">🍔</span>
-        <span class="sb-name">FastBite</span>
+        <img src="logo.jpg" alt="Punjabi Cafe Logo" style="height: 32px; margin-right: 8px; border-radius: 4px;">
+        <span class="sb-name">Punjabi Cafe</span>
         <span class="sb-tag">Admin</span>
       </div>
       <nav class="sidebar-nav">
@@ -211,6 +211,7 @@
             <option value="Sides">🍟 Sides</option>
             <option value="Desserts">🍰 Desserts</option>
             <option value="Drinks">🥤 Drinks</option>
+            <option value="Tuk Shop">Tuk Shop</option>
           </select>
         </div>
         <div class="menu-grid" id="admin-menu-grid"></div>
@@ -338,6 +339,19 @@
             <div class="settings-note" id="currency-preview"></div>
           </div>
 
+          <!-- Tax Rate -->
+          <div class="settings-card">
+            <h3><i class="fas fa-percent"></i> Tax Configuration</h3>
+            <p class="settings-desc">Set the global tax rate percentage applied to all orders.</p>
+            <div class="form-group">
+              <label>Tax Rate (%)</label>
+              <div class="inp-wrap"><i class="fas fa-percent"></i>
+                <input type="number" id="tax-input" step="0.01" min="0" onchange="saveTaxSetting(this.value)">
+              </div>
+            </div>
+            <div class="settings-note" id="tax-preview"></div>
+          </div>
+
           <!-- Admin Accounts -->
           <div class="settings-card">
             <h3><i class="fas fa-user-shield"></i> Admin Accounts</h3>
@@ -363,7 +377,7 @@
   <!-- ========== CUSTOMER PAGE ========== -->
   <div id="page-customer" class="page hidden">
     <header class="cust-header">
-      <div class="cust-brand"><span>🍔</span><span>FastBite</span></div>
+      <div class="cust-brand"><img src="logo.jpg" alt="Punjabi Cafe Logo" style="height: 32px; margin-right: 8px; border-radius: 4px;"><span>Punjabi Cafe</span></div>
       <nav class="cust-nav">
         <button class="cnav-btn active" id="cnav-home" onclick="custNav('home')"><i class="fas fa-utensils"></i>
           Menu</button>
@@ -400,6 +414,7 @@
           <button class="cat-tab" onclick="filterCat(this,'Sides')">🍟 Sides</button>
           <button class="cat-tab" onclick="filterCat(this,'Desserts')">🍰 Desserts</button>
           <button class="cat-tab" onclick="filterCat(this,'Drinks')">🥤 Drinks</button>
+          <button class="cat-tab" onclick="filterCat(this,'Tuk Shop')">Tuk Shop</button>
         </div>
         <div class="cust-menu-grid" id="cust-menu-grid"></div>
       </section>
@@ -539,7 +554,7 @@
   <!-- ========== CASHIER / POS PAGE ========== -->
   <div id="page-cashier" class="page hidden">
     <header class="cashier-header">
-      <div class="cashier-brand"><span>🍔</span><span>FastBite</span><span class="cashier-tag">POS Terminal</span></div>
+      <div class="cashier-brand"><img src="logo.jpg" alt="Punjabi Cafe Logo" style="height: 32px; margin-right: 8px; border-radius: 4px;"><span>Punjabi Cafe</span><span class="cashier-tag">POS Terminal</span></div>
       <nav class="pos-nav">
         <button class="pos-nav-btn active" id="posnav-order" onclick="posNav('order')"><i
             class="fas fa-cash-register"></i> New Order</button>

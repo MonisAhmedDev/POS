@@ -35,6 +35,7 @@ public class CatalogService {
         String name,
         String category,
         BigDecimal price,
+        BigDecimal discount,
         String description,
         String icon,
         boolean available,
@@ -50,6 +51,7 @@ public class CatalogService {
         item.setName(name.trim());
         item.setCategory(category);
         item.setPrice(MoneyUtils.money(price));
+        item.setDiscount(discount != null ? MoneyUtils.money(discount) : java.math.BigDecimal.ZERO);
         item.setDescription(StringUtils.hasText(description) ? description.trim() : "");
         item.setIcon(StringUtils.hasText(icon) ? icon.trim() : "🍽️");
         item.setAvailable(available);

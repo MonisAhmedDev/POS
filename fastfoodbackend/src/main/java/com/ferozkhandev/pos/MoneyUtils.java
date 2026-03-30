@@ -5,7 +5,6 @@ import java.math.RoundingMode;
 
 final class MoneyUtils {
 
-    static final BigDecimal TAX_RATE = new BigDecimal("0.08");
     static final BigDecimal DELIVERY_FEE = new BigDecimal("1.99");
     static final BigDecimal ZERO = new BigDecimal("0.00");
 

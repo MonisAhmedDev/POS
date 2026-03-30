@@ -25,6 +25,7 @@ public class ApiMapper {
             item.getName(),
             item.getCategory(),
             MoneyUtils.money(item.getPrice()),
+            MoneyUtils.money(item.getDiscount()),
             item.getDescription(),
             item.getIcon(),
             StringUtils.hasText(item.getImagePath()) ? "/uploads/" + item.getImagePath() : null,
@@ -65,6 +66,7 @@ public class ApiMapper {
             order.getPhone(),
             order.getAddress(),
             titleCase(order.getStatus().name()),
+            order.isPaid(),
             order.getCreatedAt()
         );
     }

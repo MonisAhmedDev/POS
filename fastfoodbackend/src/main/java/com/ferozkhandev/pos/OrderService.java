@@ -111,6 +111,13 @@ public class OrderService {
         return apiMapper.toOrder(shopOrderRepository.save(order));
     }
 
+    public OrderResponse updatePaidStatus(String orderId, boolean paid) {
+        ShopOrder order = shopOrderRepository.findById(orderId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Order not found."));
+        order.setPaid(paid);
+        return apiMapper.toOrder(shopOrderRepository.save(order));
+    }
+
     public OrderResponse cancelCustomerOrder(UserAccount customer, String orderId) {
         ShopOrder order = shopOrderRepository.findById(orderId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Order not found."));
@@ -121,6 +128,33 @@ public class OrderService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Only preparing orders can be cancelled.");
         }
         order.setStatus(OrderStatus.CANCELLED);
+        return apiMapper.toOrder(shopOrderRepository.save(order));
+    }
+
+    public OrderResponse updatePosOrder(UserAccount cashier, String orderId, PosOrderRequest request) {
+        ShopOrder order = shopOrderRepository.findById(orderId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Order not found."));
+        if (order.getStatus() != OrderStatus.PREPARING) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only orders in Preparing status can be edited.");
+        }
+        List<MenuItemQuantity> newItems = request.items().stream()
+            .map(item -> new MenuItemQuantity(catalogService.getMenuItem(item.id()), item.qty()))
+            .toList();
+        if (newItems.isEmpty()) throw new ApiException(HttpStatus.BAD_REQUEST, "Cart is empty.");
+        Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
+        List<PricingLineItem> pricingItems = newItems.stream()
+            .map(item -> new PricingLineItem(item.menuItem().getCategory(), item.menuItem().getPrice(), item.quantity()))
+            .toList();
+        CartTotals totals = pricingService.calculate(pricingItems, coupon, false);
+        order.setSubtotal(totals.subtotal());
+        order.setDiscount(totals.discount());
+        order.setTax(totals.tax());
+        order.setTotal(totals.total());
+        order.setCouponCode(coupon != null ? coupon.getCode() : null);
+        order.setCashier(cashier);
+        order.setCashierName(cashier.getName());
+        order.getItems().clear();
+        newItems.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
         return apiMapper.toOrder(shopOrderRepository.save(order));
     }
 

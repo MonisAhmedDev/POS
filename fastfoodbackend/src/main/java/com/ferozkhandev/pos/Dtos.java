@@ -39,6 +39,7 @@ record MenuItemResponse(
     String name,
     String category,
     BigDecimal price,
+    BigDecimal discount,
     String description,
     String icon,
     String imageUrl,
@@ -75,6 +76,7 @@ record OrderResponse(
     String phone,
     String address,
     String status,
+    boolean paid,
     Instant createdAt
 ) {
 }
@@ -178,6 +180,9 @@ record PosOrderRequest(
 record OrderStatusUpdateRequest(@NotBlank String status) {
 }
 
+record OrderPaidUpdateRequest(@NotNull Boolean paid) {
+}
+
 record FeedbackSubmitRequest(
     @NotBlank String orderId,
     @Min(1) @Max(5) int rating,
@@ -237,6 +242,9 @@ record CurrencyResponse(String currency) {
 record CurrencyUpdateRequest(@NotBlank String currency) {
 }
 
+record TaxUpdateRequest(@NotNull BigDecimal rate) {
+}
+
 record CustomerFeedbackBootstrap(
     List<OrderResponse> eligibleOrders,
     List<FeedbackResponse> feedback
@@ -252,7 +260,8 @@ record AdminBootstrapResponse(
     List<AdminAccountResponse> admins,
     List<AdminAccountResponse> cashiers,
     List<CouponResponse> coupons,
-    String currency
+    String currency,
+    BigDecimal taxRate
 ) {
 }
 
@@ -263,7 +272,8 @@ record CustomerBootstrapResponse(
     List<FeedbackResponse> feedback,
     CartResponse cart,
     List<CouponResponse> coupons,
-    String currency
+    String currency,
+    BigDecimal taxRate
 ) {
 }
 
@@ -273,7 +283,8 @@ record CashierBootstrapResponse(
     List<OrderResponse> orders,
     List<AdminAccountResponse> customers,
     List<CouponResponse> coupons,
-    String currency
+    String currency,
+    BigDecimal taxRate
 ) {
 }
 
@@ -332,6 +343,7 @@ record BackupOrderRecord(
     String phone,
     String address,
     String status,
+    boolean paid,
     Instant createdAt
 ) {
 }

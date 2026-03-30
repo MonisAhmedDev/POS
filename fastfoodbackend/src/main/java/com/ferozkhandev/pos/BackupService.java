@@ -50,6 +50,7 @@ public class BackupService {
                 item.getName(),
                 item.getCategory(),
                 item.getPrice(),
+                item.getDiscount(),
                 item.getDescription(),
                 item.getIcon(),
                 item.isAvailable(),
@@ -76,6 +77,7 @@ public class BackupService {
                 order.getPhone(),
                 order.getAddress(),
                 order.getStatus().name(),
+                order.isPaid(),
                 order.getCreatedAt()
             ))
             .toList();
@@ -135,6 +137,7 @@ public class BackupService {
             item.setName(record.name());
             item.setCategory(record.category());
             item.setPrice(record.price());
+            item.setDiscount(record.discount() != null ? record.discount() : java.math.BigDecimal.ZERO);
             item.setDescription(record.description());
             item.setIcon(record.icon());
             item.setAvailable(record.available());
@@ -174,6 +177,7 @@ public class BackupService {
             order.setPhone(record.phone());
             order.setAddress(record.address());
             order.setStatus(OrderStatus.valueOf(record.status().toUpperCase()));
+            order.setPaid(record.paid());
             order.setItems(new ArrayList<>(record.items().stream().map(itemRecord -> {
                 OrderItem item = new OrderItem();
                 item.setOrder(order);

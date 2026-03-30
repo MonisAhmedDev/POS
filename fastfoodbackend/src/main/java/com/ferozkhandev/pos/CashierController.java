@@ -49,6 +49,11 @@ public class CashierController {
             .body(orderService.createPosOrder(currentUserService.user(), request));
     }
 
+    @PutMapping("/orders/{orderId}")
+    OrderResponse updatePosOrder(@PathVariable String orderId, @Valid @RequestBody PosOrderRequest request) {
+        return orderService.updatePosOrder(currentUserService.user(), orderId, request);
+    }
+
     @GetMapping("/orders")
     List<OrderResponse> orders() {
         return orderService.listAllOrders();
@@ -57,6 +62,11 @@ public class CashierController {
     @PutMapping("/orders/{orderId}/status")
     OrderResponse updateOrderStatus(@PathVariable String orderId, @Valid @RequestBody OrderStatusUpdateRequest request) {
         return orderService.updateStatus(orderId, request.status());
+    }
+
+    @PutMapping("/orders/{orderId}/paid")
+    OrderResponse updateOrderPaidStatus(@PathVariable String orderId, @Valid @RequestBody OrderPaidUpdateRequest request) {
+        return orderService.updatePaidStatus(orderId, request.paid());
     }
 
     @PostMapping("/orders/{orderId}/cancel")

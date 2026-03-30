@@ -30,12 +30,13 @@ public class MenuController {
         @RequestParam String name,
         @RequestParam String category,
         @RequestParam BigDecimal price,
+        @RequestParam(required = false) BigDecimal discount,
         @RequestParam String description,
         @RequestParam(required = false) String icon,
         @RequestParam boolean available,
         @RequestParam(required = false) MultipartFile image
     ) {
-        return catalogService.saveMenuItem(null, name, category, price, description, icon, available, image, false);
+        return catalogService.saveMenuItem(null, name, category, price, discount, description, icon, available, image, false);
     }
 
     @PutMapping("/{id}")
@@ -44,13 +45,14 @@ public class MenuController {
         @RequestParam String name,
         @RequestParam String category,
         @RequestParam BigDecimal price,
+        @RequestParam(required = false) BigDecimal discount,
         @RequestParam String description,
         @RequestParam(required = false) String icon,
         @RequestParam boolean available,
         @RequestParam(required = false) MultipartFile image,
         @RequestParam(defaultValue = "false") boolean removeImage
     ) {
-        return catalogService.saveMenuItem(id, name, category, price, description, icon, available, image, removeImage);
+        return catalogService.saveMenuItem(id, name, category, price, discount, description, icon, available, image, removeImage);
     }
 
     @DeleteMapping("/{id}")

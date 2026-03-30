@@ -42,6 +42,11 @@ public class AdminController {
         return orderService.updateStatus(orderId, request.status());
     }
 
+    @PutMapping("/orders/{orderId}/paid")
+    OrderResponse updateOrderPaidStatus(@PathVariable String orderId, @Valid @RequestBody OrderPaidUpdateRequest request) {
+        return orderService.updatePaidStatus(orderId, request.paid());
+    }
+
     @GetMapping("/customers")
     List<CustomerSummaryResponse> customers() {
         return userManagementService.listCustomers();
@@ -65,6 +70,16 @@ public class AdminController {
     @PutMapping("/settings/currency")
     CurrencyResponse updateCurrency(@Valid @RequestBody CurrencyUpdateRequest request) {
         return settingsService.setCurrency(request.currency());
+    }
+
+    @GetMapping("/settings/tax")
+    java.math.BigDecimal getTaxSettings() {
+        return settingsService.getTaxRate();
+    }
+
+    @PutMapping("/settings/tax")
+    java.math.BigDecimal updateTaxSettings(@Valid @RequestBody TaxUpdateRequest request) {
+        return settingsService.setTaxRate(request.rate());
     }
 
     @GetMapping("/staff/admins")

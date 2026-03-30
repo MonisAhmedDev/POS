@@ -24,6 +24,9 @@ public class MenuItem extends BaseEntity {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal discount = BigDecimal.ZERO;
+
     @Column(nullable = false, length = 1000)
     private String description;
 
