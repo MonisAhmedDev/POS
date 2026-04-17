@@ -1,117 +1,106 @@
-# 🍔 FastBite — Fast Food Shop Management System
+# FastBite - Fast Food Shop Management System
 
-A fully featured, browser-based fast food shop management application built with plain HTML, CSS and JavaScript. No installation required — just open `index.html` in any browser.
+FastBite is a browser-based fast food shop management application with a static frontend served by a Spring Boot backend and persisted in MySQL.
 
----
+## How To Run
 
-## 🚀 How to Open
+### Client install from Docker Hub on Windows
 
-1. Locate the project folder: `G:\Softwares\Antigravity\My data\FastFoodShop\`
-2. Double-click **`index.html`**
-3. The app opens directly in your browser — done.
+Use the packaged setup script so both required containers start together:
 
-> **No internet connection required** after the first load (fonts/icons are loaded from CDNs on first open).
+1. Open the `setup` folder.
+2. Run `setup.bat`.
+3. Wait for the script to report that FastBite is ready.
+4. Open [http://localhost:8080](http://localhost:8080).
 
----
+### Source checkout / local build
 
-## 🔐 Login Credentials
+From the repository root:
 
-| Role  | Email                  | Password   |
-|-------|------------------------|------------|
-| Admin | admin@fastfood.com     | admin123   |
-| Customer | Sign up on the app | your choice |
+```bash
+docker compose up -d --build
+```
 
----
+Then open [http://localhost:8080](http://localhost:8080).
 
-## 💾 Data Saving
+### Important
 
-All data is **automatically saved** in your browser's local storage. It **survives browser closes, restarts and reboots** — you will never lose data just by closing the window.
+Do not run the app image by itself. `ferozkhandev/fastbite-app:latest` depends on a MySQL container plus the environment variables defined in `setup/compose.yaml`. Running only the app image usually results in startup failure, so nothing useful appears at `localhost:8080`.
 
-### When could data be lost?
-- If you clear your browser history / cache / site data manually
-- If you use **Private / Incognito** mode (data is wiped when the window closes)
-- If you switch browsers (each browser has its own separate storage)
+## Login Credentials
 
-### Permanent Backup (recommended)
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@fastfood.com | admin123 |
+| Customer | Sign up in the app | your choice |
 
-Use the built-in **Export / Import** feature under **Admin → Settings → Data Management**:
+## Data Persistence
 
-| Button | What it does |
-|--------|-------------|
-| **Export Data to File** | Downloads a `fastbite-backup-YYYY-MM-DD.json` file to your PC |
-| **Import Data from File** | Restores all data from a previously exported `.json` file |
-| **Clear All Data** | Wipes everything (requires confirmation) |
+Application data is stored in MySQL and uploaded photos are stored in a Docker volume. Normal container recreation should not remove data as long as the Docker volumes are kept.
 
-> 💡 **Tip:** Export your data regularly and keep the backup `.json` file somewhere safe (e.g. a USB drive or cloud folder). You can restore it on any PC at any time using Import.
+## Troubleshooting
 
----
+If `http://localhost:8080` is blank or does not load:
 
-## 🛠️ Features
+1. Confirm both `app` and `db` containers are running.
+2. Check the app logs for database connection errors.
+3. Do not use the app image alone unless you also provide a reachable MySQL database and the required `SPRING_DATASOURCE_*` environment variables.
+
+Example checks:
+
+```bash
+docker compose -f setup/compose.yaml ps
+docker compose -f setup/compose.yaml logs app
+```
+
+## Publishing
+
+To publish a Docker Hub image that works on both Windows `amd64` machines and Apple Silicon machines, use:
+
+```bash
+sh scripts/publish-multiarch.sh
+```
+
+The script publishes `ferozkhandev/fastbite-app:latest` for `linux/amd64` and `linux/arm64` by default.
+
+## Features
 
 ### Admin Panel
-| Section | Features |
-|---------|----------|
-| **Dashboard** | Total orders, revenue, menu items count, customers count, recent orders, top-selling items |
-| **Menu Items** | Add / Edit / Delete food items; set name, category, price, description, emoji icon and optionally a real **food photo** |
-| **Orders** | View all customer orders with status filter; update order status (Preparing → Ready → Delivered) |
-| **Customers** | View all registered customers, their total orders, total spent, average rating, and full order history; **Delete** customer accounts |
-| **Feedback** | Read all customer reviews and star ratings |
-| **Settings** | Export/Import/Clear data; manage admin accounts (add new admins, remove existing ones) |
+
+- Dashboard with totals, revenue, recent orders, and top-selling items
+- Menu item management with food photo uploads
+- Order management with status updates
+- Customer management and history review
+- Feedback and review management
+- Settings, backup, import, and admin account management
 
 ### Customer Panel
-| Section | Features |
-|---------|----------|
-| **Menu** | Browse all available items by category; add items to cart |
-| **Cart** | View cart, adjust quantities, remove items, see subtotal/tax/delivery breakdown |
-| **Checkout** | Enter delivery details; choose Cash on Delivery or Credit/Debit Card |
-| **My Orders** | View all placed orders with status; **Cancel order** if it is still in *Preparing* status |
-| **Feedback** | Rate and review delivered orders (1–5 stars); view past reviews |
 
----
+- Browse menu items by category
+- Manage cart contents
+- Checkout with delivery details
+- Track and cancel eligible orders
+- Leave ratings and reviews for delivered orders
 
-## 🖼️ Food Photos
+### Cashier Panel
 
-When adding or editing a menu item, admin can optionally upload a real photo:
+- Create counter orders
+- Manage walk-in customer carts
+- Update order status
 
-1. In **Menu Items → Add Item** (or Edit), click the **Food Photo** upload area
-2. Select any image file from your PC (JPG, PNG, WEBP, etc.)
-3. A preview appears immediately
-4. Click **Save Item** — the photo is stored and displayed on the menu card
-5. If no photo is uploaded, the **emoji icon** is used as the thumbnail instead
+## Project Structure
 
----
-
-## ❌ Order Cancellation
-
-- Customers can cancel an order **only while it is in Preparing status**
-- Once the admin changes status to *Ready* or *Delivered*, it can no longer be cancelled
-- Cancelling shows a confirmation modal — click **"Yes, Cancel Order"** to confirm
-
----
-
-## 🗂️ Project Files
-
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `index.html` | All HTML structure and page layouts |
-| `style.css` | Complete design system (dark theme, yellow accents, animations) |
-| `app.js` | All application logic (auth, admin panel, customer panel, DB helpers) |
-| `README.md` | This documentation file |
+| `index.html` | Frontend markup |
+| `style.css` | Frontend styling |
+| `app.js` | Frontend application logic |
+| `fastfoodbackend/` | Spring Boot backend and API |
+| `setup/` | Client-facing Docker Hub deployment package |
 
----
+## Technical Notes
 
-## 🎨 Design
-
-- **Theme:** Black background with yellow accents
-- **Fonts:** Outfit (headings) · Inter (body) — from Google Fonts
-- **Icons:** Font Awesome 6
-- **Animations:** Floating food sticker background, fade/scale transitions, hover effects
-
----
-
-## ⚙️ Technical Details
-
-- **Storage:** Browser `localStorage` (keys prefixed `fb_`)
-- **Images:** Stored as base64 strings inside `localStorage`
-- **No backend / server needed** — fully client-side
-- **No frameworks** — vanilla HTML, CSS, and JavaScript only
+- Frontend assets are bundled into the Spring Boot JAR during build.
+- The backend serves the frontend on port `8080`.
+- The backend requires MySQL and will fail startup if the database is unavailable.
+- Uploaded photos are served from `/uploads/**`.

@@ -1,3 +1,21 @@
 .claude/
 cookies.txt
 login_resp.json
+
+# OS files
+.DS_Store
+
+# IDE metadata
+.idea/
+*.iml
+.vscode/
+
+# Build outputs and local tool state
+fastfoodbackend/.gradle/
+fastfoodbackend/build/
+
+# Local packaging artifacts
+setup.zip
+
+# Common local logs
+*.log
