@@ -4,7 +4,6 @@
    ============================================================ */
 
 const DEFAULT_CURRENCY = 'PKR|₨|Pakistani Rupee';
-const MAX_ITEM_QUANTITY = 2000;
 
 const state = {
   session: null,
@@ -17,8 +16,7 @@ const state = {
   customers: [],
   customerSummaries: [],
   cart: { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null },
-  currency: DEFAULT_CURRENCY,
-  taxRate: 0.00
+  currency: DEFAULT_CURRENCY
 };
 
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? `http://${window.location.hostname}:8080` : (window.location.protocol === 'file:' ? 'http://localhost:8080' : '');
@@ -102,8 +100,6 @@ const DB = {
   clearSession: () => { state.session = null; },
   getCurrency: () => state.currency || DEFAULT_CURRENCY,
   saveCurrency: (v) => { state.currency = v; },
-  getTaxRate: () => state.taxRate,
-  saveTaxRate: (v) => { state.taxRate = parseFloat(v) || 0; },
 
   reset() {
     state.session = null;
@@ -117,7 +113,6 @@ const DB = {
     state.customerSummaries = [];
     state.cart = emptyCart();
     state.currency = DEFAULT_CURRENCY;
-    state.taxRate = 0;
     custCoupon = null;
   },
 
@@ -144,20 +139,11 @@ const DB = {
     state.orders = data.orders || [];
     state.feedback = data.feedback || [];
     state.customerSummaries = data.customers || [];
-    state.customers = state.customerSummaries.map(c => ({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-      role: 'customer',
-      createdAt: c.createdAt,
-      restaurantDiscountType: c.restaurantDiscountType,
-      restaurantDiscountValue: c.restaurantDiscountValue
-    }));
+    state.customers = state.customerSummaries.map(c => ({ id: c.id, name: c.name, email: c.email, role: 'customer', createdAt: c.createdAt }));
     state.admins = data.admins || [];
     state.cashiers = data.cashiers || [];
     state.coupons = data.coupons || [];
     state.currency = data.currency || DEFAULT_CURRENCY;
-    state.taxRate = data.taxRate || 0;
   },
 
   async refreshCustomer() {
@@ -169,7 +155,6 @@ const DB = {
     state.coupons = data.coupons || [];
     state.cart = data.cart || emptyCart();
     state.currency = data.currency || DEFAULT_CURRENCY;
-    state.taxRate = data.taxRate || 0;
     applyCouponSelections();
   },
 
@@ -181,7 +166,6 @@ const DB = {
     state.customers = data.customers || [];
     state.coupons = data.coupons || [];
     state.currency = data.currency || DEFAULT_CURRENCY;
-    state.taxRate = data.taxRate || 0;
   }
 };
 
@@ -194,31 +178,6 @@ function fmtPrice(n) {
   return sym + parseFloat(n).toFixed(2);
 }
 function isSuperAdmin() { const s = DB.getSession(); return !!(s && s.isSuperAdmin); }
-function effectiveMenuPrice(item) {
-  return Math.max(0, parseFloat(item?.price || 0) - parseFloat(item?.discount || 0));
-}
-function formatTaxLabel(rate = state.taxRate || 0) {
-  return `Tax (${(parseFloat(rate || 0) * 100).toFixed(2)}%)`;
-}
-function formatCustomerDiscount(type, value) {
-  const amount = parseFloat(value || 0);
-  if (!type || amount <= 0) return '';
-  return type === 'percentage' ? `${amount}% customer discount` : `${fmtPrice(amount)} customer discount`;
-}
-function discountLineLabel(code) {
-  return code ? `Discount (${code})` : 'Restaurant Discount';
-}
-function findCustomerByName(name) {
-  const normalized = (name || '').trim().toLowerCase();
-  if (!normalized) return null;
-  return DB.getUsers().find(u => u.role === 'customer' && (u.name || '').trim().toLowerCase() === normalized) || null;
-}
-function calculateDirectDiscount(type, value, subtotal) {
-  const amount = parseFloat(value || 0);
-  if (!type || amount <= 0 || subtotal <= 0) return 0;
-  if (type === 'percentage') return subtotal * (amount / 100);
-  return Math.min(subtotal, amount);
-}
 
 function toast(msg, type = 'info') {
   const c = document.getElementById('toast-container');
@@ -237,7 +196,6 @@ function showModal(title, html) {
 }
 
 function closeModal() {
-  adminOrderEditState = null;
   document.getElementById('modal-overlay').classList.add('hidden');
 }
 
@@ -426,9 +384,6 @@ function itemFormHtml(item) {
       <div class="form-group"><label>Category</label><div class="inp-wrap"><i class="fas fa-layer-group"></i><select id="it-cat">${cats.map(c => `<option value="${c}" ${item?.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div></div>
       <div class="form-group"><label>Price ($)</label><div class="inp-wrap"><i class="fas fa-dollar-sign"></i><input type="number" id="it-price" value="${item?.price || ''}" placeholder="9.99" step="0.01" min="0" required></div></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>Discount ($) <span style="color:var(--text3);font-weight:400;font-size:.8rem">Admin-controlled, leave 0 for none</span></label><div class="inp-wrap"><i class="fas fa-tag"></i><input type="number" id="it-discount" value="${item?.discount || '0'}" placeholder="0.00" step="0.01" min="0"></div></div>
-    </div>
     <div class="form-group"><label>Description</label><textarea id="it-desc" rows="2" placeholder="Brief description...">${item?.description || ''}</textarea></div>
     <div class="form-row">
       <div class="form-group"><label>Icon (emoji fallback)</label><div class="inp-wrap"><i class="fas fa-smile"></i><input type="text" id="it-icon" value="${item?.icon || '🍔'}" placeholder="🍔" maxlength="4"></div></div>
@@ -486,8 +441,6 @@ async function saveItem(id) {
     form.append('name', name);
     form.append('category', cat);
     form.append('price', price);
-    const discount = parseFloat(document.getElementById('it-discount')?.value || '0') || 0;
-    form.append('discount', discount);
     form.append('description', desc);
     form.append('icon', icon);
     form.append('available', String(avail));
@@ -534,20 +487,11 @@ function renderOrders() {
       <td><span class="badge badge-${o.status}">${o.status}</span></td>
       <td style="color:var(--text3);font-size:.78rem">${fmtDate(o.createdAt)}</td>
       <td>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <label style="font-size:.8rem;cursor:pointer;" title="Mark Paid">
-            <input type="checkbox" ${o.paid ? 'checked' : ''} onchange="adminUpdatePaidStatus('${o.id}', this.checked)"> Paid
-          </label>
-        </div>
-        <select class="filter-select" style="font-size:.78rem;padding:6px 10px;margin-top:4px" onchange="updateOrderStatus('${o.id}',this.value)">
+        <select class="filter-select" style="font-size:.78rem;padding:6px 10px" onchange="updateOrderStatus('${o.id}',this.value)">
           <option value="Preparing" ${o.status === 'Preparing' ? 'selected' : ''}>Preparing</option>
           <option value="Ready"     ${o.status === 'Ready' ? 'selected' : ''}    >Ready</option>
           <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
         </select>
-        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
-          ${o.status !== 'Delivered' && o.status !== 'Cancelled' ? `<button class="btn-icon" onclick="showAdminEditOrder('${o.id}')" title="Edit Order"><i class="fas fa-pen"></i></button>` : ''}
-          <button class="btn-icon" onclick="showReceipt('${o.id}')" title="View Receipt"><i class="fas fa-file-invoice-dollar"></i></button>
-        </div>
       </td>
     </tr>`).join('');
 }
@@ -597,158 +541,6 @@ async function confirmCancelOrder(id) {
   }
 }
 
-let adminOrderEditState = null;
-
-function showAdminEditOrder(orderId) {
-  const order = DB.getOrders().find(o => o.id === orderId);
-  if (!order) return;
-  if (order.status === 'Delivered' || order.status === 'Cancelled') {
-    toast('Only active orders can be edited', 'error');
-    return;
-  }
-  adminOrderEditState = {
-    id: order.id,
-    customerName: order.customerName || 'Walk-in Customer',
-    paymentMethod: order.paymentMethod || 'Cash',
-    couponCode: order.couponCode || '',
-    items: order.items.map(item => {
-      const menuItem = DB.getItems().find(entry => entry.id === item.id) || {};
-      return {
-        ...menuItem,
-        id: item.id,
-        name: item.name,
-        icon: item.icon || menuItem.icon || '🍽️',
-        category: item.category || menuItem.category || '',
-        qty: item.qty
-      };
-    })
-  };
-  showModal(`Edit Order #${order.id.slice(-6).toUpperCase()}`, adminOrderEditorHtml());
-}
-
-function adminOrderEditorHtml() {
-  if (!adminOrderEditState) return '';
-  const items = adminOrderEditState.items;
-  const menuItems = DB.getItems().filter(item => item.available);
-  const couponCode = adminOrderEditState.couponCode || '';
-  return `
-    <div style="display:grid;gap:18px">
-      <div style="padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg3)">
-        <div style="font-weight:700;margin-bottom:6px">${adminOrderEditState.customerName}</div>
-        <div style="color:var(--text3);font-size:.82rem">Adjust items, coupon, and payment method for this order.</div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Payment Method</label>
-          <div class="inp-wrap"><i class="fas fa-credit-card"></i>
-            <select id="admin-order-payment">
-              <option value="Cash" ${adminOrderEditState.paymentMethod === 'Cash' ? 'selected' : ''}>Cash</option>
-              <option value="Card" ${adminOrderEditState.paymentMethod === 'Card' ? 'selected' : ''}>Card</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Coupon Code</label>
-          <div class="inp-wrap"><i class="fas fa-tag"></i>
-            <input type="text" id="admin-order-coupon" value="${couponCode}" placeholder="Optional coupon" style="text-transform:uppercase">
-          </div>
-        </div>
-      </div>
-      <div>
-        <div style="font-weight:700;margin-bottom:10px">Current Items</div>
-        ${items.length ? items.map(item => `
-          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-            <div style="flex:1">
-              <div style="font-weight:600">${item.icon} ${item.name}</div>
-              <div style="font-size:.78rem;color:var(--text3)">${item.category}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <button class="btn-icon" onclick="adminEditOrderQty('${item.id}', -1)"><i class="fas fa-minus"></i></button>
-              <span style="min-width:36px;text-align:center">${item.qty}</span>
-              <button class="btn-icon" onclick="adminEditOrderQty('${item.id}', 1)"><i class="fas fa-plus"></i></button>
-            </div>
-          </div>
-        `).join('') : '<div style="color:var(--text3);font-size:.85rem">No items selected yet.</div>'}
-      </div>
-      <div>
-        <div style="font-weight:700;margin-bottom:10px">Add More Items</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
-          ${menuItems.map(item => `
-            <button class="btn-outline" style="justify-content:flex-start;text-align:left;padding:12px" onclick="adminEditOrderAddItem('${item.id}')">
-              <span style="display:block;font-weight:700">${item.icon || '🍽️'} ${item.name}</span>
-              <span style="display:block;font-size:.78rem;color:var(--text3);margin-top:4px">${fmtPrice(effectiveMenuPrice(item))}</span>
-            </button>
-          `).join('')}
-        </div>
-      </div>
-      <button class="btn-primary btn-full" onclick="saveAdminEditedOrder()"><i class="fas fa-save"></i> Update Order</button>
-    </div>
-  `;
-}
-
-function rerenderAdminOrderEditor() {
-  if (!adminOrderEditState) return;
-  const payment = document.getElementById('admin-order-payment')?.value;
-  const couponCode = document.getElementById('admin-order-coupon')?.value;
-  if (payment) adminOrderEditState.paymentMethod = payment;
-  if (couponCode !== undefined) adminOrderEditState.couponCode = couponCode;
-  document.getElementById('modal-body').innerHTML = adminOrderEditorHtml();
-}
-
-function adminEditOrderAddItem(itemId) {
-  const menuItem = DB.getItems().find(item => item.id === itemId);
-  if (!menuItem || !adminOrderEditState) return;
-  const existing = adminOrderEditState.items.find(item => item.id === itemId);
-  if (existing) {
-    if (existing.qty >= MAX_ITEM_QUANTITY) {
-      toast(`Per-item quantity cannot exceed ${MAX_ITEM_QUANTITY}`, 'error');
-      return;
-    }
-    existing.qty += 1;
-  } else {
-    adminOrderEditState.items.push({ ...menuItem, qty: 1 });
-  }
-  rerenderAdminOrderEditor();
-}
-
-function adminEditOrderQty(itemId, delta) {
-  if (!adminOrderEditState) return;
-  const index = adminOrderEditState.items.findIndex(item => item.id === itemId);
-  if (index === -1) return;
-  const nextQty = adminOrderEditState.items[index].qty + delta;
-  if (nextQty > MAX_ITEM_QUANTITY) {
-    toast(`Per-item quantity cannot exceed ${MAX_ITEM_QUANTITY}`, 'error');
-    return;
-  }
-  if (nextQty <= 0) adminOrderEditState.items.splice(index, 1);
-  else adminOrderEditState.items[index].qty = nextQty;
-  rerenderAdminOrderEditor();
-}
-
-async function saveAdminEditedOrder() {
-  if (!adminOrderEditState || !adminOrderEditState.items.length) {
-    toast('Add at least one item to the order', 'error');
-    return;
-  }
-  const paymentMethod = document.getElementById('admin-order-payment').value;
-  const couponCode = document.getElementById('admin-order-coupon').value.trim().toUpperCase() || null;
-  try {
-    await API.put(`/api/admin/orders/${adminOrderEditState.id}`, {
-      customerName: adminOrderEditState.customerName,
-      couponCode,
-      paymentMethod,
-      items: adminOrderEditState.items.map(item => ({ id: item.id, qty: item.qty }))
-    });
-    await DB.refreshAdmin();
-    closeModal();
-    adminOrderEditState = null;
-    toast('Order updated successfully', 'success');
-    renderOrders();
-  } catch (err) {
-    toast(err.message || 'Unable to update order', 'error');
-  }
-}
-
 function renderAdminFeedback() {
   const fb = [...DB.getFeedback()].reverse();
   const container = document.getElementById('admin-feedback-list');
@@ -778,7 +570,6 @@ function renderCustomers() {
     const uFb = feedback.filter(f => f.customerId === u.id);
     const spent = uOrders.reduce((s, o) => s + o.total, 0);
     const avgRating = uFb.length ? (uFb.reduce((s, f) => s + f.rating, 0) / uFb.length).toFixed(1) : null;
-    const customerDiscount = formatCustomerDiscount(u.restaurantDiscountType, u.restaurantDiscountValue);
     return `
     <div class="cust-detail-card">
       <div class="cust-detail-hdr">
@@ -789,7 +580,6 @@ function renderCustomers() {
           <div class="cust-detail-meta">
             <span><i class="fas fa-calendar"></i> Joined ${new Date(u.createdAt).toLocaleDateString()}</span>
             ${avgRating ? `<span><i class="fas fa-star" style="color:var(--yellow)"></i> Avg Rating: ${avgRating}</span>` : ''}
-            ${customerDiscount ? `<span><i class="fas fa-tag" style="color:var(--yellow)"></i> ${customerDiscount}</span>` : ''}
           </div>
         </div>
         <div class="cust-detail-stats">
@@ -797,10 +587,7 @@ function renderCustomers() {
           <div class="cust-stat"><div class="cust-stat-val" style="color:var(--yellow)">${fmtPrice(spent)}</div><div class="cust-stat-lbl">Total Spent</div></div>
           <div class="cust-stat"><div class="cust-stat-val">${uFb.length}</div><div class="cust-stat-lbl">Reviews</div></div>
         </div>
-        <div style="display:flex;gap:8px;align-self:flex-start;flex-shrink:0">
-          <button class="btn-outline btn-sm" onclick="showCustomerDiscountModal('${u.id}')"><i class="fas fa-tag"></i> Discount</button>
-          <button class="btn-danger btn-sm" onclick="deleteCustomer('${u.id}')"><i class="fas fa-user-minus"></i> Delete</button>
-        </div>
+        <button class="btn-danger btn-sm" onclick="deleteCustomer('${u.id}')" style="align-self:flex-start;flex-shrink:0"><i class="fas fa-user-minus"></i> Delete</button>
       </div>
       ${uOrders.length ? `
       <div class="cust-orders-tbl">
@@ -817,49 +604,6 @@ function renderCustomers() {
       </div>` : '<div style="color:var(--text3);font-size:.85rem;padding:12px 0">No orders yet.</div>'}
     </div>`;
   }).join('');
-}
-
-function showCustomerDiscountModal(id) {
-  const customer = DB.getUsers().find(u => u.id === id && u.role === 'customer');
-  if (!customer) return;
-  showModal(`Restaurant Discount: ${customer.name}`, `
-    <div class="form-group">
-      <label>Discount Type</label>
-      <div class="inp-wrap"><i class="fas fa-percent"></i>
-        <select id="cust-discount-type">
-          <option value="none" ${!customer.restaurantDiscountType ? 'selected' : ''}>No Discount</option>
-          <option value="percentage" ${customer.restaurantDiscountType === 'percentage' ? 'selected' : ''}>Percentage (%)</option>
-          <option value="fixed" ${customer.restaurantDiscountType === 'fixed' ? 'selected' : ''}>Fixed Amount</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-group">
-      <label>Discount Value</label>
-      <div class="inp-wrap"><i class="fas fa-tag"></i>
-        <input type="number" id="cust-discount-value" min="0" step="0.01" value="${customer.restaurantDiscountValue || 0}">
-      </div>
-    </div>
-    <p style="font-size:.82rem;color:var(--text3);margin-bottom:18px">This discount is applied automatically for this customer, even without a coupon.</p>
-    <button class="btn-primary btn-full" onclick="saveCustomerDiscount('${id}')"><i class="fas fa-save"></i> Save Discount</button>
-  `);
-}
-
-async function saveCustomerDiscount(id) {
-  const discountType = document.getElementById('cust-discount-type').value;
-  const discountValue = parseFloat(document.getElementById('cust-discount-value').value || '0');
-  if (Number.isNaN(discountValue) || discountValue < 0) {
-    toast('Enter a valid discount value', 'error');
-    return;
-  }
-  try {
-    await API.put(`/api/admin/customers/${id}/discount`, { discountType, discountValue });
-    await DB.refreshAdmin();
-    closeModal();
-    toast('Customer discount updated', 'success');
-    renderCustomers();
-  } catch (err) {
-    toast(err.message || 'Unable to update customer discount', 'error');
-  }
 }
 
 function deleteCustomer(id) {
@@ -1060,9 +804,6 @@ function renderSettings() {
   }
   renderCurrencyCard();
   renderCashierAccountsList();
-  // Pre-populate tax input
-  const taxInput = document.getElementById('tax-input');
-  if (taxInput) taxInput.value = (parseFloat(state.taxRate || 0) * 100).toFixed(2);
 }
 
 function showAddAdminModal() {
@@ -1388,21 +1129,13 @@ async function saveCurrencySetting(val) {
     await API.put('/api/admin/settings/currency', { currency: val });
     DB.saveCurrency(val);
     const [code, sym, name] = val.split('|');
-    document.getElementById('currency-preview').innerHTML = `<i class="fas fa-check text-green"></i> Currency updated to ${name} (${code})`;
-    toast('Currency updated effectively', 'success');
-  } catch (err) { toast(err.message, 'error'); }
+    document.getElementById('currency-preview').innerHTML =
+      `<i class="fas fa-check-circle" style="color:var(--yellow)"></i> Saved! Prices now show as <strong>${sym}12.99</strong> — ${name} (${code})`;
+    toast(`Currency set to ${name} (${sym})`, 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to save currency', 'error');
+  }
 }
-
-async function saveTaxSetting(val) {
-  try {
-    const rate = parseFloat(val) / 100;
-    await API.put('/api/admin/settings/tax', { rate });
-    DB.saveTaxRate(rate);
-    document.getElementById('tax-preview').innerHTML = `<i class="fas fa-check text-green"></i> Tax updated to ${val}%`;
-    toast('Tax updated effectively', 'success');
-  } catch (err) { toast(err.message, 'error'); }
-}
-
 
 // ===== CASHIER ACCOUNTS =====
 function renderCashierAccountsList() {
@@ -1492,7 +1225,6 @@ async function confirmDeleteCashier(id) {
 let posCat = '';
 let posCart = [];
 let posCoupon = null;
-let posEditOrderId = null;
 
 async function loadCashier(refresh = true) {
   if (refresh) await DB.refreshCashier();
@@ -1501,8 +1233,6 @@ async function loadCashier(refresh = true) {
   document.getElementById('cashier-avatar').textContent = user.name[0].toUpperCase();
   showPage('page-cashier');
   posCart = [];
-  posCoupon = null;
-  posEditOrderId = null;
   buildPosCatTabs();
   renderPosMenu();
   renderPosCart();
@@ -1546,10 +1276,7 @@ function renderPosMenu() {
     grid.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><p>No items found.</p></div>';
     return;
   }
-  grid.innerHTML = items.map(item => {
-    const hasDiscount = item.discount && parseFloat(item.discount) > 0;
-    const effectivePrice = effectiveMenuPrice(item);
-    return `
+  grid.innerHTML = items.map(item => `
     <div class="pos-item-card" onclick="posAddToCart('${item.id}')">
       <div class="pos-item-thumb">
         ${item.image
@@ -1557,13 +1284,9 @@ function renderPosMenu() {
       : `<span class="mc-icon-emoji">${item.icon}</span>`}
       </div>
       <div class="pos-item-name">${item.name}</div>
-      <div class="pos-item-price">
-        ${hasDiscount ? `<span style="text-decoration:line-through;color:var(--text3);font-size:.78em;margin-right:4px">${fmtPrice(item.price)}</span>` : ''}
-        ${fmtPrice(effectivePrice)}
-      </div>
+      <div class="pos-item-price">${fmtPrice(item.price)}</div>
       <button class="pos-add-btn"><i class="fas fa-plus"></i></button>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
 function renderCashierOrders() {
@@ -1582,7 +1305,6 @@ function renderCashierOrders() {
         <div>
           <div class="cashier-order-id">#${o.id.slice(-6).toUpperCase()}
             <span class="badge" style="background:${statusColors[o.status]}22;color:${statusColors[o.status]};border:1px solid ${statusColors[o.status]}44;margin-left:8px">${o.status}</span>
-            <span class="badge" style="background:${o.paid ? '#22c55e' : '#f59e0b'}22;color:${o.paid ? '#22c55e' : '#f59e0b'};border:1px solid ${o.paid ? '#22c55e' : '#f59e0b'}44;margin-left:8px">${o.paid ? 'PAID' : 'UNPAID'}</span>
           </div>
           <div style="font-size:.8rem;color:var(--text3);margin-top:3px">
             <i class="fas fa-user" style="margin-right:4px"></i>${o.customerName || 'Walk-in'}
@@ -1601,16 +1323,10 @@ function renderCashierOrders() {
       </div>
       ${o.status !== 'Delivered' && o.status !== 'Cancelled' ? `
       <div class="cashier-order-actions">
-        ${o.status === 'Preparing' ? `<button class="btn-outline btn-sm" onclick="editPosOrder('${o.id}')"><i class="fas fa-edit"></i> Edit Order</button>` : ''}
         ${o.status === 'Preparing' ? `<button class="btn-outline btn-sm" onclick="cashierUpdateStatus('${o.id}','Ready')"><i class="fas fa-check"></i> Mark Ready</button>` : ''}
         ${o.status === 'Ready' ? `<button class="btn-primary btn-sm" onclick="cashierUpdateStatus('${o.id}','Delivered')"><i class="fas fa-box"></i> Mark Delivered</button>` : ''}
-        ${!o.paid ? `<button class="btn-outline btn-sm" style="color:var(--yellow);border-color:var(--yellow)" onclick="cashierUpdatePaid('${o.id}', true)"><i class="fas fa-money-bill"></i> Mark Paid</button>` : `<button class="btn-outline btn-sm" style="color:var(--green);border-color:var(--green)" onclick="cashierUpdatePaid('${o.id}', false)"><i class="fas fa-times"></i> Mark Unpaid</button>`}
-        <button class="btn-outline btn-sm" onclick="showReceipt('${o.id}')"><i class="fas fa-receipt"></i> Receipt</button>
         <button class="btn-danger btn-sm" onclick="cashierCancelOrder('${o.id}')"><i class="fas fa-times"></i> Cancel</button>
-      </div>` : `
-      <div class="cashier-order-actions">
-        <button class="btn-outline btn-sm" onclick="showReceipt('${o.id}')"><i class="fas fa-receipt"></i> Receipt</button>
-      </div>`}
+      </div>` : ''}
     </div>`).join('');
 }
 
@@ -1657,16 +1373,8 @@ function posAddToCart(itemId) {
   const item = DB.getItems().find(i => i.id === itemId);
   if (!item) return;
   const exists = posCart.find(c => c.id === itemId);
-  const price = effectiveMenuPrice(item);
-  if (exists) {
-    if (exists.qty >= MAX_ITEM_QUANTITY) {
-      toast(`Per-item quantity cannot exceed ${MAX_ITEM_QUANTITY}`, 'error');
-      return;
-    }
-    exists.qty++;
-  } else {
-    posCart.push({ ...item, price, qty: 1 });
-  }
+  if (exists) { exists.qty++; }
+  else { posCart.push({ ...item, qty: 1 }); }
   renderPosCart();
   // brief flash on button
   toast(`${item.icon} ${item.name} added`, 'success');
@@ -1675,12 +1383,7 @@ function posAddToCart(itemId) {
 function posUpdateQty(itemId, delta) {
   const idx = posCart.findIndex(c => c.id === itemId);
   if (idx === -1) return;
-  const nextQty = posCart[idx].qty + delta;
-  if (nextQty > MAX_ITEM_QUANTITY) {
-    toast(`Per-item quantity cannot exceed ${MAX_ITEM_QUANTITY}`, 'error');
-    return;
-  }
-  posCart[idx].qty = nextQty;
+  posCart[idx].qty += delta;
   if (posCart[idx].qty <= 0) posCart.splice(idx, 1);
   renderPosCart();
 }
@@ -1700,8 +1403,6 @@ function removePosCoupon() { posCoupon = null; renderPosCart(); }
 function renderPosCart() {
   const itemsEl = document.getElementById('pos-order-items');
   const footerEl = document.getElementById('pos-order-footer');
-  const currentPayment = document.getElementById('pos-payment')?.value || 'Cash';
-  const currentPromoValue = document.getElementById('pos-promo')?.value || '';
   if (!posCart.length) {
     itemsEl.innerHTML = '<div class="pos-empty-order"><i class="fas fa-shopping-bag"></i><p>Add items from the menu</p></div>';
     footerEl.innerHTML = '';
@@ -1745,27 +1446,20 @@ function renderPosCart() {
     }
   }
 
-  const customer = findCustomerByName(document.getElementById('pos-customer')?.value || '');
-  const customerDiscount = calculateDirectDiscount(customer?.restaurantDiscountType, customer?.restaurantDiscountValue, subtotal);
-  const totalDiscount = Math.min(subtotal, discount + customerDiscount);
-
-  const delivery = 0;
-  const taxRate = state.taxRate || 0;
-  const tax = Math.max(0, subtotal - totalDiscount) * taxRate;
-  const total = Math.max(0, subtotal - totalDiscount) + tax + delivery;
+  const tax = Math.max(0, subtotal - discount) * 0.08;
+  const total = Math.max(0, subtotal - discount) + tax;
 
   footerEl.innerHTML = `
     <div class="pos-totals">
       <div class="pos-total-row"><span>Subtotal</span><span>${fmtPrice(subtotal)}</span></div>
       ${discount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>Discount (${posCoupon.code})</span><span>-${fmtPrice(discount)} <i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removePosCoupon()"></i></span></div>` : ''}
-      ${customerDiscount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>${formatCustomerDiscount(customer.restaurantDiscountType, customer.restaurantDiscountValue)}</span><span>-${fmtPrice(customerDiscount)}</span></div>` : ''}
-      <div class="pos-total-row"><span>${formatTaxLabel(taxRate)}</span><span>${fmtPrice(tax)}</span></div>
+      <div class="pos-total-row"><span>Tax (8%)</span><span>${fmtPrice(tax)}</span></div>
       <div class="pos-total-row pos-grand-total"><span>TOTAL</span><span>${fmtPrice(total)}</span></div>
     </div>
     
     ${!posCoupon ? `
       <div class="pos-pay-row" style="margin-top:-10px;margin-bottom:8px;display:flex;gap:6px">
-        <div class="inp-wrap" style="margin:0;flex:1"><i class="fas fa-tag"></i><input type="text" id="pos-promo" value="${currentPromoValue}" placeholder="Promo code" style="padding:6px 10px 6px 32px"></div>
+        <div class="inp-wrap" style="margin:0;flex:1"><i class="fas fa-tag"></i><input type="text" id="pos-promo" placeholder="Promo code" style="padding:6px 10px 6px 32px"></div>
         <button class="btn-outline btn-sm" onclick="applyPosCoupon()">Apply</button>
       </div>` : ''}
 
@@ -1773,12 +1467,12 @@ function renderPosCart() {
       <label style="font-size:.8rem;color:var(--text3)">Payment Method</label>
       <div class="inp-wrap" style="margin:6px 0 12px"><i class="fas fa-credit-card"></i>
         <select id="pos-payment">
-          <option value="Cash" ${currentPayment === 'Cash' ? 'selected' : ''}>Cash</option>
-          <option value="Card" ${currentPayment === 'Card' ? 'selected' : ''}>Card</option>
+          <option value="Cash">Cash</option>
+          <option value="Card">Card</option>
         </select>
       </div>
     </div>
-    <button class="btn-primary btn-full" onclick="placePosOrder()"><i class="fas fa-check-circle"></i> ${posEditOrderId ? 'Update Order' : 'Place Order'}</button>
+    <button class="btn-primary btn-full" onclick="placePosOrder()"><i class="fas fa-check-circle"></i> Place Order</button>
     <button class="btn-outline btn-full" style="margin-top:8px" onclick="clearPosCart()"><i class="fas fa-trash"></i> Clear Order</button>
   `;
 }
@@ -1787,31 +1481,19 @@ async function placePosOrder() {
   if (!posCart.length) { toast('Cart is empty', 'error'); return; }
   const customerName = document.getElementById('pos-customer').value.trim() || 'Walk-in Customer';
   const payment = document.getElementById('pos-payment')?.value || 'Cash';
-  const editId = posEditOrderId;
   try {
-    const body = {
+    await API.post('/api/cashier/orders', {
       customerName,
       couponCode: posCoupon ? posCoupon.code : null,
       paymentMethod: payment,
       items: posCart.map(c => ({ id: c.id, qty: c.qty }))
-    };
-    let resultOrder;
-    if (editId) {
-      resultOrder = await API.put(`/api/cashier/orders/${editId}`, body);
-    } else {
-      resultOrder = await API.post('/api/cashier/orders', body);
-    }
+    });
     await DB.refreshCashier();
     posCart = [];
     posCoupon = null;
-    posEditOrderId = null;
     document.getElementById('pos-customer').value = '';
     renderPosCart();
-    toast(editId ? 'Order updated! ✏️' : `Order placed for ${customerName}! 🎉`, 'success');
-    // Auto-show receipt for new orders
-    if (!editId && resultOrder && resultOrder.id) {
-      showReceipt(resultOrder.id);
-    }
+    toast(`Order placed for ${customerName}! 🎉`, 'success');
   } catch (err) {
     toast(err.message || 'Unable to place order', 'error');
   }
@@ -1820,24 +1502,7 @@ async function placePosOrder() {
 function clearPosCart() {
   posCart = [];
   posCoupon = null;
-  posEditOrderId = null;
   renderPosCart();
-}
-
-function editPosOrder(orderId) {
-  const o = DB.getOrders().find(x => x.id === orderId);
-  if (!o) return;
-  if (o.status !== 'Preparing') { toast('Only Preparing orders can be edited', 'error'); return; }
-  posCart = o.items.map(i => {
-    const menuItem = DB.getItems().find(m => m.id === i.id) || {};
-    return { ...menuItem, id: i.id, name: i.name, price: parseFloat(i.price), icon: i.icon || '🍽️', category: i.category, qty: i.qty };
-  });
-  posCoupon = null;
-  posEditOrderId = orderId;
-  document.getElementById('pos-customer').value = o.customerName || '';
-  posNav('order');
-  renderPosCart();
-  toast(`Editing order #${orderId.slice(-6).toUpperCase()} — modify items then click Update Order`, 'info');
 }
 
 // ===== CASHIER CUSTOMERS =====
@@ -1982,35 +1647,22 @@ function renderCustMenu() {
   const items = DB.getItems().filter(i => i.available && (!activeCat || i.category === activeCat));
   const grid = document.getElementById('cust-menu-grid');
   if (!items.length) { grid.innerHTML = '<div class="empty-state"><i class="fas fa-utensils"></i><p>No items available in this category.</p></div>'; return; }
-  grid.innerHTML = items.map(i => {
-    const hasDiscount = i.discount && parseFloat(i.discount) > 0;
-    const effectivePrice = effectiveMenuPrice(i);
-    return `
+  grid.innerHTML = items.map(i => `
     <div class="cust-card">
       <div class="mc-thumb">${i.image ? `<img src="${i.image}" alt="${i.name}">` : `<span class="mc-icon-emoji">${i.icon}</span>`}</div>
-      ${hasDiscount ? '<div style="position:absolute;top:8px;right:8px;background:#ef4444;color:#fff;font-size:.72rem;font-weight:700;padding:3px 7px;border-radius:20px">SALE</div>' : ''}
       <div class="mc-name">${i.name}</div>
       <div class="mc-cat">${i.category}</div>
       <div class="mc-desc">${i.description}</div>
       <div class="cust-card-footer">
-        <div class="mc-price">
-          ${hasDiscount ? `<span style="text-decoration:line-through;color:var(--text3);font-size:.85em;margin-right:6px">${fmtPrice(i.price)}</span>` : ''}
-          ${fmtPrice(effectivePrice)}
-        </div>
+        <div class="mc-price">${fmtPrice(i.price)}</div>
         <button class="add-cart-btn" onclick="addToCart('${i.id}')" title="Add to cart"><i class="fas fa-plus"></i></button>
       </div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
 async function addToCart(itemId) {
   const item = DB.getItems().find(i => i.id === itemId);
   if (!item) return;
-  const existing = DB.getCart().find(c => c.id === itemId);
-  if (existing && existing.qty >= MAX_ITEM_QUANTITY) {
-    toast(`Per-item quantity cannot exceed ${MAX_ITEM_QUANTITY}`, 'error');
-    return;
-  }
   try {
     syncCustomerCart(await API.post('/api/customer/cart/items', { menuItemId: itemId, quantity: 1 }));
     refreshCustomerCartViews();
@@ -2083,9 +1735,9 @@ function renderCart() {
 
   document.getElementById('cart-summary-lines').innerHTML = `
     <div class="summary-line"><span>Subtotal</span><span>${fmtPrice(cartState.subtotal)}</span></div>
-    ${cartState.discount > 0 ? `<div class="summary-line" style="color:var(--yellow)"><span>${discountLineLabel(cartState.couponCode || custCoupon?.code)}</span><span>-${fmtPrice(cartState.discount)} ${cartState.couponCode ? '<i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removeCustCoupon()"></i>' : ''}</span></div>` : ''}
+    ${cartState.discount > 0 ? `<div class="summary-line" style="color:var(--yellow)"><span>Discount (${cartState.couponCode || custCoupon?.code})</span><span>-${fmtPrice(cartState.discount)} <i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removeCustCoupon()"></i></span></div>` : ''}
     <div class="summary-line"><span>Delivery Fee</span><span>${fmtPrice(cartState.delivery)}</span></div>
-    <div class="summary-line"><span>${formatTaxLabel()}</span><span>${fmtPrice(cartState.tax)}</span></div>
+    <div class="summary-line"><span>Tax (8%)</span><span>${fmtPrice(cartState.tax)}</span></div>
   `;
 
   const totalHtml = `
@@ -2102,15 +1754,10 @@ function renderCart() {
 async function changeQty(id, delta) {
   const item = DB.getCart().find(c => c.id === id);
   if (!item) return;
-  const nextQty = item.qty + delta;
-  if (nextQty > MAX_ITEM_QUANTITY) {
-    toast(`Per-item quantity cannot exceed ${MAX_ITEM_QUANTITY}`, 'error');
-    return;
-  }
   try {
-    const cart = nextQty <= 0
+    const cart = item.qty + delta <= 0
       ? await API.delete(`/api/customer/cart/items/${id}`)
-      : await API.patch(`/api/customer/cart/items/${id}`, { quantity: nextQty });
+      : await API.patch(`/api/customer/cart/items/${id}`, { quantity: item.qty + delta });
     syncCustomerCart(cart);
     refreshCustomerCartViews();
   } catch (err) {
@@ -2137,9 +1784,9 @@ function renderCheckout() {
 
   document.getElementById('co-items').innerHTML = [
     ...cart.map(c => `<div class="co-item-row"><span>${c.icon} ${c.name} ×${c.qty}</span><span>${fmtPrice(c.price * c.qty)}</span></div>`),
-    cartState.discount > 0 ? `<div class="co-item-row" style="color:var(--yellow)"><span>${discountLineLabel(cartState.couponCode || custCoupon?.code)}</span><span>-${fmtPrice(cartState.discount)}</span></div>` : '',
+    cartState.discount > 0 ? `<div class="co-item-row" style="color:var(--yellow)"><span>Discount (${cartState.couponCode || custCoupon?.code})</span><span>-${fmtPrice(cartState.discount)}</span></div>` : '',
     `<div class="co-item-row"><span>Delivery</span><span>${fmtPrice(cartState.delivery)}</span></div>`,
-    `<div class="co-item-row"><span>${formatTaxLabel()}</span><span>${fmtPrice(cartState.tax)}</span></div>`
+    `<div class="co-item-row"><span>Tax</span><span>${fmtPrice(cartState.tax)}</span></div>`
   ].join('');
   document.getElementById('co-total').innerHTML = `<span>Total</span><span>${fmtPrice(cartState.total)}</span>`;
 }
@@ -2217,7 +1864,6 @@ function renderCustOrders() {
         <div>
           <span class="order-id">#${o.id.slice(-6).toUpperCase()}</span>
           <span class="badge badge-${o.status}" style="margin-left:10px">${o.status}</span>
-          <span class="badge" style="background:${o.paid ? '#22c55e' : '#f59e0b'}22;color:${o.paid ? '#22c55e' : '#f59e0b'};border:1px solid ${o.paid ? '#22c55e' : '#f59e0b'}44;margin-left:8px;font-size:0.7rem;padding:2px 6px;">${o.paid ? 'PAID' : 'UNPAID'}</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="co-date">${fmtDate(o.createdAt)}</span>
@@ -2230,12 +1876,9 @@ function renderCustOrders() {
         <div class="co-items-txt">${o.items.map(i => `${i.icon} ${i.name} ×${i.qty}`).join(' · ')}</div>
         <div class="co-amt">${fmtPrice(o.total)}</div>
       </div>
-      <div style="margin-top:10px;font-size:.8rem;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <i class="fas fa-${o.paymentMethod === 'Cash' ? 'money-bill-wave' : 'credit-card'}"></i> ${o.paymentMethod} &nbsp;·&nbsp;
-          <i class="fas fa-map-marker-alt"></i> ${o.address}
-        </div>
-        <button class="btn-outline btn-sm" onclick="showReceipt('${o.id}')"><i class="fas fa-receipt"></i> View Receipt</button>
+      <div style="margin-top:10px;font-size:.8rem;color:var(--text3)">
+        <i class="fas fa-${o.paymentMethod === 'Cash' ? 'money-bill-wave' : 'credit-card'}"></i> ${o.paymentMethod} &nbsp;·&nbsp;
+        <i class="fas fa-map-marker-alt"></i> ${o.address}
       </div>
     </div>`).join('');
 }
@@ -2306,93 +1949,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === this) closeModal();
   });
 });
-
-async function adminUpdatePaidStatus(id, paid) {
-  try {
-    await API.put(`/api/admin/orders/${id}/paid`, { paid });
-    await DB.refreshAdmin();
-    toast(`Order marked as ${paid ? 'Paid' : 'Unpaid'}`, 'success');
-    renderOrders();
-  } catch(e) { toast(e.message, 'error')}
-}
-
-async function cashierUpdatePaid(id, paid) {
-  try {
-    await API.put(`/api/cashier/orders/${id}/paid`, { paid });
-    await DB.refreshCashier();
-    toast(`Order marked as ${paid ? 'Paid' : 'Unpaid'}`, 'success');
-    renderCashierOrders();
-  } catch(e) { toast(e.message, 'error')}
-}
-
-function showReceipt(id) {
-  const o = DB.getOrders().find(x => x.id === id);
-  if (!o) return;
-  const currencySymbol = DB.getCurrency().split('|')[1] || '$';
-  const afterDiscount = parseFloat(o.subtotal) - parseFloat(o.discount);
-  const orderType = o.deliveryName === 'Walk-in Customer' || !o.deliveryName ? 'Dine-in / Takeaway' : 'Delivery';
-  const html = `
-    <div id="print-area" style="font-family: monospace; color:#000; background:#fff; padding:20px; border-radius:4px; max-width:420px; margin:0 auto; font-size:14px; line-height:1.5;">
-      <div style="text-align:center; margin-bottom:16px;">
-        <img src="logo.jpg" alt="Logo" style="height:60px; margin-bottom:8px;">
-        <h2 style="margin:0;font-size:24px;">Punjabi Cafe</h2>
-        <div>123 Fast Food St.</div>
-        <div>Tel: +92 300 0000000</div>
-        <div style="margin-top:10px;font-size:16px;letter-spacing:2px;"><strong>RECEIPT</strong></div>
-      </div>
-      <hr style="border-top:1px dashed #000; margin:10px 0;">
-      <div><strong>Order:</strong> #${o.id.slice(-6).toUpperCase()}</div>
-      <div><strong>Date:</strong> ${new Date(o.createdAt).toLocaleString()}</div>
-      <div><strong>Customer:</strong> ${o.customerName || 'Walk-in'}</div>
-      ${o.phone ? `<div><strong>Phone:</strong> ${o.phone}</div>` : ''}
-      ${o.address && o.address !== 'In-store' ? `<div><strong>Address:</strong> ${o.address}</div>` : ''}
-      <div><strong>Type:</strong> ${orderType}</div>
-      ${o.cashierName ? `<div><strong>Cashier:</strong> ${o.cashierName}</div>` : ''}
-      <hr style="border-top:1px dashed #000; margin:10px 0;">
-      <table style="width:100%; text-align:left; border-collapse:collapse;">
-        <tr style="border-bottom:1px solid #ccc;">
-          <th style="padding-bottom:6px;text-align:left;">Item</th>
-          <th style="padding-bottom:6px;text-align:center;">Qty</th>
-          <th style="padding-bottom:6px;text-align:right;">Price</th>
-          <th style="padding-bottom:6px;text-align:right;">Total</th>
-        </tr>
-        ${o.items.map(i => `
-          <tr>
-            <td style="padding:4px 0;">${i.name}</td>
-            <td style="text-align:center;padding:4px 0;">x${i.qty}</td>
-            <td style="text-align:right;padding:4px 0;">${currencySymbol}${parseFloat(i.price).toFixed(2)}</td>
-            <td style="text-align:right;padding:4px 0;">${currencySymbol}${parseFloat(i.price * i.qty).toFixed(2)}</td>
-          </tr>
-        `).join('')}
-      </table>
-      <hr style="border-top:1px dashed #000; margin:10px 0;">
-      <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>${currencySymbol}${parseFloat(o.subtotal).toFixed(2)}</span></div>
-      ${o.discount > 0 ? `<div style="display:flex; justify-content:space-between; color:#c0392b;"><span>Discount${o.couponCode ? ' (' + o.couponCode + ')' : ''}:</span><span>-${currencySymbol}${parseFloat(o.discount).toFixed(2)}</span></div>` : ''}
-      ${o.discount > 0 ? `<div style="display:flex; justify-content:space-between; font-weight:600;"><span>After Discount:</span><span>${currencySymbol}${afterDiscount.toFixed(2)}</span></div>` : ''}
-      ${o.delivery > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Delivery Fee:</span><span>${currencySymbol}${parseFloat(o.delivery).toFixed(2)}</span></div>` : ''}
-      <div style="display:flex; justify-content:space-between;"><span>Tax:</span><span>${currencySymbol}${parseFloat(o.tax).toFixed(2)}</span></div>
-      <hr style="border-top:2px solid #000; margin:10px 0;">
-      <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:18px;"><span>TOTAL:</span><span>${currencySymbol}${parseFloat(o.total).toFixed(2)}</span></div>
-      <div style="text-align:center; margin-top:20px; font-size:12px;">
-        <div>Paid via: ${o.paymentMethod}</div>
-        <div style="margin-top:4px; font-weight:bold;">*** ${o.paid ? 'PAID' : 'PAYMENT PENDING'} ***</div>
-        <div style="margin-top:16px; font-style:italic;">Thank you for dining with us!</div>
-        <div style="margin-top:4px;">Punjabi Cafe — Premium Fast Food</div>
-      </div>
-    </div>
-    <div style="text-align:center; margin-top:16px;">
-      <button class="btn-primary" onclick="printReceipt()"><i class="fas fa-print"></i> Print Receipt</button>
-    </div>
-  `;
-  showModal('Receipt', html);
-}
-
-function printReceipt() {
-  const content = document.getElementById('print-area').innerHTML;
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write('<html><head><title>Receipt</title></head><body>' + content + '</body></html>');
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
-}

@@ -28,7 +28,7 @@ public class SecurityConfig {
             .cors(withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/index.html", "/style.css", "/app.js", "/uploads/**", "/favicon.ico").permitAll()
+                .requestMatchers("/", "/index.html", "/style.css", "/app.js", "/uploads/**", "/favicon.ico", "/*.jpg", "/*.png", "/*.webp" ).permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/menu-items").permitAll()

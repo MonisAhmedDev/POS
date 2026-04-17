@@ -52,7 +52,7 @@ class CustomerCartOrderIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items[0].qty").value(1))
             .andExpect(jsonPath("$.subtotal").value(8.99))
-            .andExpect(jsonPath("$.total").value(11.70));
+            .andExpect(jsonPath("$.total").value(10.98));
 
         mockMvc.perform(post("/api/customer/cart/coupon")
                 .cookie(authCookies)
@@ -65,7 +65,7 @@ class CustomerCartOrderIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.couponCode").value("WELCOME10"))
             .andExpect(jsonPath("$.discount").value(0.90))
-            .andExpect(jsonPath("$.total").value(10.73));
+            .andExpect(jsonPath("$.total").value(10.08));
 
         mockMvc.perform(post("/api/customer/orders")
                 .cookie(authCookies)
@@ -81,7 +81,7 @@ class CustomerCartOrderIntegrationTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("Preparing"))
             .andExpect(jsonPath("$.couponCode").value("WELCOME10"))
-            .andExpect(jsonPath("$.total").value(10.73));
+            .andExpect(jsonPath("$.total").value(10.08));
 
         mockMvc.perform(get("/api/customer/orders").cookie(authCookies))
             .andExpect(status().isOk())

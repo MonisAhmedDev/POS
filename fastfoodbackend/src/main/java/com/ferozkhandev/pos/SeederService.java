@@ -34,6 +34,11 @@ public class SeederService {
         } else if (!settingsService.getCurrency().equals(SettingsService.DEFAULT_CURRENCY) && settingsService.getCurrency().isBlank()) {
             settingsService.setCurrency(SettingsService.DEFAULT_CURRENCY);
         }
+
+        BigDecimal taxRate = settingsService.getTaxRate();
+        if (taxRate.compareTo(new BigDecimal("0.08")) == 0 || taxRate.compareTo(new BigDecimal("8.00")) == 0) {
+            settingsService.setTaxRate(new BigDecimal(SettingsService.DEFAULT_TAX_RATE));
+        }
     }
 
     private void seedAdmin() {
