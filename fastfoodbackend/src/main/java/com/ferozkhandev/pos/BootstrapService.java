@@ -14,6 +14,7 @@ public class BootstrapService {
     private final UserManagementService userManagementService;
     private final SettingsService settingsService;
     private final CartService cartService;
+    private final OrderHistoryService orderHistoryService;
 
     public AdminBootstrapResponse admin(UserAccount user) {
         return new AdminBootstrapResponse(
@@ -26,7 +27,8 @@ public class BootstrapService {
             userManagementService.listCashiers(),
             user.isSuperAdmin() ? catalogService.listCoupons() : java.util.List.of(),
             settingsService.getCurrency(),
-            settingsService.getTaxRate()
+            settingsService.getTaxRate(),
+            orderHistoryService.buildReport()
         );
     }
 

@@ -26,6 +26,7 @@ public class AdminController {
     private final SettingsService settingsService;
     private final CurrentUserService currentUserService;
     private final BootstrapService bootstrapService;
+    private final OrderHistoryService orderHistoryService;
 
     @GetMapping("/bootstrap")
     AdminBootstrapResponse bootstrap() {
@@ -35,6 +36,11 @@ public class AdminController {
     @GetMapping("/orders")
     List<OrderResponse> orders() {
         return orderService.listAllOrders();
+    }
+
+    @GetMapping("/orders/history")
+    OrderHistoryReportResponse orderHistory() {
+        return orderHistoryService.buildReport();
     }
 
     @PutMapping("/orders/{orderId}/status")

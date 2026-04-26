@@ -271,7 +271,8 @@ record AdminBootstrapResponse(
     List<AdminAccountResponse> cashiers,
     List<CouponResponse> coupons,
     String currency,
-    BigDecimal taxRate
+    BigDecimal taxRate,
+    OrderHistoryReportResponse orderHistory
 ) {
 }
 
@@ -295,6 +296,31 @@ record CashierBootstrapResponse(
     List<CouponResponse> coupons,
     String currency,
     BigDecimal taxRate
+) {
+}
+
+record OrderHistoryBucketResponse(
+    String periodType,
+    String label,
+    Instant periodStart,
+    Instant periodEnd,
+    int orderCount,
+    int paidOrderCount,
+    int deliveredOrderCount,
+    int cancelledOrderCount,
+    BigDecimal salesTotal,
+    List<OrderResponse> orders
+) {
+}
+
+record OrderHistoryReportResponse(
+    Instant generatedAt,
+    String timezone,
+    int businessDayCutoffHour,
+    OrderHistoryBucketResponse currentBusinessDay,
+    List<OrderHistoryBucketResponse> daily,
+    List<OrderHistoryBucketResponse> weekly,
+    List<OrderHistoryBucketResponse> monthly
 ) {
 }
 

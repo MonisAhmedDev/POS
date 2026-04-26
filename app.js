@@ -5,6 +5,19 @@
 
 const DEFAULT_CURRENCY = 'PKR|₨|Pakistani Rupee';
 const MAX_ITEM_QUANTITY = 2000;
+const BRAND_LOGO_PATH = 'logo.jpeg';
+
+function emptyOrderHistoryReport() {
+  return {
+    generatedAt: null,
+    timezone: '',
+    businessDayCutoffHour: 4,
+    currentBusinessDay: null,
+    daily: [],
+    weekly: [],
+    monthly: []
+  };
+}
 
 const state = {
   session: null,
@@ -16,12 +29,14 @@ const state = {
   cashiers: [],
   customers: [],
   customerSummaries: [],
+  orderHistory: emptyOrderHistoryReport(),
   cart: { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null },
   currency: DEFAULT_CURRENCY,
   taxRate: 0.00
 };
 
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? `http://${window.location.hostname}:8080` : (window.location.protocol === 'file:' ? 'http://localhost:8080' : '');
+const APP_ASSET_BASE = API_BASE || (window.location.origin && window.location.origin !== 'null' ? window.location.origin : '');
 
 const API = {
   async request(url, options = {}) {
@@ -64,6 +79,18 @@ function normalizeItem(item) {
   return { ...item, image: item.imageUrl || null };
 }
 
+function normalizeOrderHistory(report) {
+  return {
+    generatedAt: report?.generatedAt || null,
+    timezone: report?.timezone || '',
+    businessDayCutoffHour: report?.businessDayCutoffHour ?? 4,
+    currentBusinessDay: report?.currentBusinessDay || null,
+    daily: report?.daily || [],
+    weekly: report?.weekly || [],
+    monthly: report?.monthly || []
+  };
+}
+
 function applyCouponSelections() {
   custCoupon = state.coupons.find(c => c.code === state.cart.couponCode) || null;
 }
@@ -79,6 +106,13 @@ function refreshCustomerCartViews() {
   if (document.getElementById('csec-checkout')?.classList.contains('active')) renderCheckout();
 }
 
+function resolveAppAssetUrl(path) {
+  const cleanPath = (path || '').replace(/^\/+/, '');
+  if (!cleanPath) return '';
+  if (/^https?:\/\//i.test(cleanPath)) return cleanPath;
+  return APP_ASSET_BASE ? `${APP_ASSET_BASE}/${cleanPath}` : cleanPath;
+}
+
 const DB = {
   getUsers: () => [...state.admins, ...state.cashiers, ...state.customers],
   saveUsers: (d) => {
@@ -90,6 +124,8 @@ const DB = {
   saveItems: (d) => { state.items = d; },
   getOrders: () => state.orders,
   saveOrders: (d) => { state.orders = d; },
+  getOrderHistory: () => state.orderHistory,
+  saveOrderHistory: (d) => { state.orderHistory = normalizeOrderHistory(d); },
   getFeedback: () => state.feedback,
   saveFeedback: (d) => { state.feedback = d; },
   getCoupons: () => state.coupons,
@@ -115,6 +151,7 @@ const DB = {
     state.cashiers = [];
     state.customers = [];
     state.customerSummaries = [];
+    state.orderHistory = emptyOrderHistoryReport();
     state.cart = emptyCart();
     state.currency = DEFAULT_CURRENCY;
     state.taxRate = 0;
@@ -158,6 +195,7 @@ const DB = {
     state.coupons = data.coupons || [];
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
+    state.orderHistory = normalizeOrderHistory(data.orderHistory);
   },
 
   async refreshCustomer() {
@@ -168,6 +206,7 @@ const DB = {
     state.feedback = data.feedback || [];
     state.coupons = data.coupons || [];
     state.cart = data.cart || emptyCart();
+    state.orderHistory = emptyOrderHistoryReport();
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
     applyCouponSelections();
@@ -180,6 +219,7 @@ const DB = {
     state.orders = data.orders || [];
     state.customers = data.customers || [];
     state.coupons = data.coupons || [];
+    state.orderHistory = emptyOrderHistoryReport();
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
   }
@@ -199,6 +239,10 @@ function effectiveMenuPrice(item) {
 }
 function formatTaxLabel(rate = state.taxRate || 0) {
   return `Tax (${(parseFloat(rate || 0) * 100).toFixed(2)}%)`;
+}
+function formatHistoryWindow(start, end) {
+  if (!start || !end) return '';
+  return `${fmtDate(start)} - ${fmtDate(end)}`;
 }
 function formatCustomerDiscount(type, value) {
   const amount = parseFloat(value || 0);
@@ -523,7 +567,11 @@ function renderOrders() {
   if (filter) orders = orders.filter(o => o.status === filter);
   orders = [...orders].reverse();
   const tbody = document.getElementById('orders-tbody');
-  if (!orders.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:10px"></i>No orders found</td></tr>`; return; }
+  if (!orders.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3)"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:10px"></i>No orders found</td></tr>`;
+    renderOrderHistoryReport();
+    return;
+  }
   tbody.innerHTML = orders.map(o => `
     <tr>
       <td class="order-id">#${o.id.slice(-6).toUpperCase()}</td>
@@ -550,6 +598,101 @@ function renderOrders() {
         </div>
       </td>
     </tr>`).join('');
+  renderOrderHistoryReport();
+}
+
+function renderOrderHistoryReport() {
+  const container = document.getElementById('order-history-report');
+  if (!container) return;
+
+  const report = DB.getOrderHistory() || emptyOrderHistoryReport();
+  const cutoff = report.businessDayCutoffHour ?? 4;
+  const current = report.currentBusinessDay;
+  const sections = [
+    renderHistorySection('Daily Rollup', `Completed business days since the last week. Each day runs from ${cutoff}:00 AM to ${cutoff}:00 AM.`, report.daily),
+    renderHistorySection('Weekly Rollup', 'Older days are automatically bundled week by week once they are more than 7 business days old.', report.weekly),
+    renderHistorySection('Monthly Rollup', 'After about a month, history is grouped into previous months for reporting.', report.monthly)
+  ].join('');
+
+  container.innerHTML = `
+    <div class="history-report-shell">
+      <div class="history-current-card">
+        <div>
+          <div class="history-eyebrow">Current window</div>
+          <h3>${current?.label || 'Current Business Day'}</h3>
+          <p>Business day reset: ${cutoff}:00 AM${report.timezone ? ` (${report.timezone})` : ''}</p>
+        </div>
+        <div class="history-stat-grid">
+          ${renderHistoryStat('Orders', current?.orderCount ?? 0)}
+          ${renderHistoryStat('Sales', fmtPrice(current?.salesTotal ?? 0))}
+          ${renderHistoryStat('Paid', current?.paidOrderCount ?? 0)}
+          ${renderHistoryStat('Delivered', current?.deliveredOrderCount ?? 0)}
+        </div>
+      </div>
+      ${sections}
+    </div>
+  `;
+}
+
+function renderHistorySection(title, description, buckets = []) {
+  return `
+    <section class="history-section">
+      <div class="history-section-head">
+        <div>
+          <h3>${title}</h3>
+          <p>${description}</p>
+        </div>
+      </div>
+      ${buckets.length ? buckets.map(renderHistoryBucket).join('') : '<div class="history-empty">No archived order groups yet for this range.</div>'}
+    </section>
+  `;
+}
+
+function renderHistoryBucket(bucket) {
+  return `
+    <details class="history-bucket-card">
+      <summary>
+        <div>
+          <div class="history-bucket-title">${bucket.label}</div>
+          <div class="history-bucket-meta">${formatHistoryWindow(bucket.periodStart, bucket.periodEnd)}</div>
+        </div>
+        <div class="history-bucket-summary">
+          <span>${bucket.orderCount} orders</span>
+          <strong>${fmtPrice(bucket.salesTotal)}</strong>
+        </div>
+      </summary>
+      <div class="history-stat-grid">
+        ${renderHistoryStat('Orders', bucket.orderCount)}
+        ${renderHistoryStat('Sales', fmtPrice(bucket.salesTotal))}
+        ${renderHistoryStat('Paid', bucket.paidOrderCount)}
+        ${renderHistoryStat('Delivered', bucket.deliveredOrderCount)}
+        ${renderHistoryStat('Cancelled', bucket.cancelledOrderCount)}
+      </div>
+      <div class="history-order-list">
+        ${bucket.orders.map(o => `
+          <div class="history-order-row">
+            <div>
+              <div class="history-order-ref">#${o.id.slice(-6).toUpperCase()} · ${o.customerName || 'Walk-in Customer'}</div>
+              <div class="history-order-meta">${fmtDate(o.createdAt)} · ${o.status} · ${o.paymentMethod}</div>
+            </div>
+            <div class="history-order-actions">
+              <strong>${fmtPrice(o.total)}</strong>
+              <button class="btn-outline btn-sm" onclick="showReceipt('${o.id}')"><i class="fas fa-receipt"></i> Receipt</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </details>
+  `;
+}
+
+function renderHistoryStat(label, value) {
+  return `
+    <div class="history-stat-card">
+      <span>${label}</span>
+      <strong>${value}</strong>
+    </div>
+  `;
 }
 
 async function updateOrderStatus(id, status) {
@@ -2173,7 +2316,7 @@ async function placeOrder() {
     const cvv = document.getElementById('co-cvv').value;
     if (card.length < 16 || !exp || cvv.length < 3) { toast('Please enter valid card details', 'error'); return; }
     try {
-      await API.post('/api/customer/orders', {
+      const order = await API.post('/api/customer/orders', {
         deliveryName: name,
         phone,
         address,
@@ -2185,6 +2328,7 @@ async function placeOrder() {
       await DB.refreshCustomer();
       toast('Order placed successfully! 🎉', 'success');
       custNav('orders');
+      showReceipt(order.id);
     } catch (err) {
       toast(err.message || 'Unable to place order', 'error');
     }
@@ -2192,7 +2336,7 @@ async function placeOrder() {
   }
 
   try {
-    await API.post('/api/customer/orders', {
+    const order = await API.post('/api/customer/orders', {
       deliveryName: name,
       phone,
       address,
@@ -2201,6 +2345,7 @@ async function placeOrder() {
     await DB.refreshCustomer();
     toast('Order placed successfully! 🎉', 'success');
     custNav('orders');
+    showReceipt(order.id);
   } catch (err) {
     toast(err.message || 'Unable to place order', 'error');
   }
@@ -2331,13 +2476,13 @@ function showReceipt(id) {
   const currencySymbol = DB.getCurrency().split('|')[1] || '$';
   const afterDiscount = parseFloat(o.subtotal) - parseFloat(o.discount);
   const orderType = o.deliveryName === 'Walk-in Customer' || !o.deliveryName ? 'Dine-in / Takeaway' : 'Delivery';
+  const logoUrl = resolveAppAssetUrl(BRAND_LOGO_PATH);
   const html = `
-    <div id="print-area" style="font-family: monospace; color:#000; background:#fff; padding:20px; border-radius:4px; max-width:420px; margin:0 auto; font-size:14px; line-height:1.5;">
+    <div id="print-area" style="font-family:'Courier New',monospace;color:#111;background:#fff;padding:24px;border-radius:10px;max-width:440px;margin:0 auto;font-size:14px;line-height:1.5;border:1px solid #ece7dc;">
       <div style="text-align:center; margin-bottom:16px;">
-        <img src="logo.jpg" alt="Logo" style="height:60px; margin-bottom:8px;">
+        <img src="${logoUrl}" alt="Punjabi Cafe Logo" style="height:86px; margin-bottom:10px; object-fit:contain;">
         <h2 style="margin:0;font-size:24px;">Punjabi Cafe</h2>
-        <div>123 Fast Food St.</div>
-        <div>Tel: +92 300 0000000</div>
+        <div style="color:#555">Order Receipt</div>
         <div style="margin-top:10px;font-size:16px;letter-spacing:2px;"><strong>RECEIPT</strong></div>
       </div>
       <hr style="border-top:1px dashed #000; margin:10px 0;">
@@ -2377,7 +2522,7 @@ function showReceipt(id) {
         <div>Paid via: ${o.paymentMethod}</div>
         <div style="margin-top:4px; font-weight:bold;">*** ${o.paid ? 'PAID' : 'PAYMENT PENDING'} ***</div>
         <div style="margin-top:16px; font-style:italic;">Thank you for dining with us!</div>
-        <div style="margin-top:4px;">Punjabi Cafe — Premium Fast Food</div>
+        <div style="margin-top:4px;">Punjabi Cafe - Premium Fast Food</div>
       </div>
     </div>
     <div style="text-align:center; margin-top:16px;">
@@ -2390,7 +2535,22 @@ function showReceipt(id) {
 function printReceipt() {
   const content = document.getElementById('print-area').innerHTML;
   const printWindow = window.open('', '_blank');
-  printWindow.document.write('<html><head><title>Receipt</title></head><body>' + content + '</body></html>');
+  if (!printWindow) {
+    toast('Please allow pop-ups to print the receipt.', 'error');
+    return;
+  }
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Receipt</title>
+        <style>
+          body { margin: 0; padding: 24px; background: #f5f5f5; }
+          #print-area { box-shadow: none !important; }
+        </style>
+      </head>
+      <body>${content}</body>
+    </html>
+  `);
   printWindow.document.close();
   printWindow.focus();
   printWindow.print();

@@ -59,7 +59,7 @@ tasks.named('test') {
 
 tasks.named('processResources') {
 	from(frontendDir) {
-		include 'index.html', 'style.css', 'app.js'
+		include 'index.html', 'style.css', 'app.js', '*.jpg', '*.jpeg', '*.png', '*.svg'
 		into 'static'
 	}
 }
