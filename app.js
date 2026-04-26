@@ -2522,7 +2522,9 @@ function showReceipt(id) {
         <div>Paid via: ${o.paymentMethod}</div>
         <div style="margin-top:4px; font-weight:bold;">*** ${o.paid ? 'PAID' : 'PAYMENT PENDING'} ***</div>
         <div style="margin-top:16px; font-style:italic;">Thank you for dining with us!</div>
-        <div style="margin-top:4px;">Punjabi Cafe - Premium Fast Food</div>
+        <div style="margin-top:4px; font-weight:700;">Punjabi Cafe</div>
+        <div style="margin-top:4px;">50A, Civic Centre, E Block Gulshan-e-Ravi, Lahore</div>
+        <div style="margin-top:4px;">03000745672</div>
       </div>
     </div>
     <div style="text-align:center; margin-top:16px;">
