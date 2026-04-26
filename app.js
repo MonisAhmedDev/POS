@@ -2480,7 +2480,7 @@ function showReceipt(id) {
   const html = `
     <div id="print-area" style="font-family:'Courier New',monospace;color:#111;background:#fff;padding:24px;border-radius:10px;max-width:440px;margin:0 auto;font-size:14px;line-height:1.5;border:1px solid #ece7dc;">
       <div style="text-align:center; margin-bottom:16px;">
-        <img src="${logoUrl}" alt="Punjabi Cafe Logo" style="height:86px; margin-bottom:10px; object-fit:contain;">
+        <img src="${logoUrl}" alt="Punjabi Cafe Logo" style="height:130px; margin-bottom:12px; object-fit:contain;">
         <h2 style="margin:0;font-size:24px;">Punjabi Cafe</h2>
         <div style="color:#555">Order Receipt</div>
         <div style="margin-top:10px;font-size:16px;letter-spacing:2px;"><strong>RECEIPT</strong></div>
