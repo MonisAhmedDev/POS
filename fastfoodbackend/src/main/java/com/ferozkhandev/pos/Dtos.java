@@ -249,6 +249,9 @@ record CustomerSummaryResponse(
 record CurrencyResponse(String currency) {
 }
 
+record LogoResponse(String logoUrl) {
+}
+
 record CurrencyUpdateRequest(@NotBlank String currency) {
 }
 
@@ -272,6 +275,7 @@ record AdminBootstrapResponse(
     List<CouponResponse> coupons,
     String currency,
     BigDecimal taxRate,
+    String brandLogoUrl,
     OrderHistoryReportResponse orderHistory
 ) {
 }
@@ -284,7 +288,8 @@ record CustomerBootstrapResponse(
     CartResponse cart,
     List<CouponResponse> coupons,
     String currency,
-    BigDecimal taxRate
+    BigDecimal taxRate,
+    String brandLogoUrl
 ) {
 }
 
@@ -295,7 +300,8 @@ record CashierBootstrapResponse(
     List<AdminAccountResponse> customers,
     List<CouponResponse> coupons,
     String currency,
-    BigDecimal taxRate
+    BigDecimal taxRate,
+    String brandLogoUrl
 ) {
 }
 

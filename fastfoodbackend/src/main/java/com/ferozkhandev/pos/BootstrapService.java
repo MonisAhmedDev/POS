@@ -28,6 +28,7 @@ public class BootstrapService {
             user.isSuperAdmin() ? catalogService.listCoupons() : java.util.List.of(),
             settingsService.getCurrency(),
             settingsService.getTaxRate(),
+            settingsService.getBrandLogoUrl(),
             orderHistoryService.buildReport()
         );
     }
@@ -41,7 +42,8 @@ public class BootstrapService {
             cartService.getCart(user),
             catalogService.listCoupons(),
             settingsService.getCurrency(),
-            settingsService.getTaxRate()
+            settingsService.getTaxRate(),
+            settingsService.getBrandLogoUrl()
         );
     }
 
@@ -53,7 +55,8 @@ public class BootstrapService {
             userManagementService.listCashierCustomers(),
             catalogService.listCoupons(),
             settingsService.getCurrency(),
-            settingsService.getTaxRate()
+            settingsService.getTaxRate(),
+            settingsService.getBrandLogoUrl()
         );
     }
 }

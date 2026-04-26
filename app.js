@@ -20,6 +20,10 @@ function emptyOrderHistoryReport() {
   };
 }
 
+function resolveInitialBrandLogoUrl() {
+  return resolveAppAssetUrl(BRAND_LOGO_PATH) || BRAND_LOGO_EMBEDDED;
+}
+
 const state = {
   session: null,
   items: [],
@@ -32,6 +36,7 @@ const state = {
   customerSummaries: [],
   orderHistory: emptyOrderHistoryReport(),
   cart: { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null },
+  brandLogoUrl: '',
   currency: DEFAULT_CURRENCY,
   taxRate: 0.00
 };
@@ -110,8 +115,21 @@ function refreshCustomerCartViews() {
 function resolveAppAssetUrl(path) {
   const cleanPath = (path || '').replace(/^\/+/, '');
   if (!cleanPath) return '';
+  if (/^data:/i.test(cleanPath)) return cleanPath;
   if (/^https?:\/\//i.test(cleanPath)) return cleanPath;
   return APP_ASSET_BASE ? `${APP_ASSET_BASE}/${cleanPath}` : cleanPath;
+}
+
+function normalizeBrandLogoUrl(url) {
+  if (!url) return resolveInitialBrandLogoUrl();
+  return resolveAppAssetUrl(url) || resolveInitialBrandLogoUrl();
+}
+
+function updateBrandLogos() {
+  const logoUrl = normalizeBrandLogoUrl(state.brandLogoUrl);
+  document.querySelectorAll('.brand-logo').forEach(img => {
+    img.src = logoUrl;
+  });
 }
 
 const DB = {
@@ -137,6 +155,8 @@ const DB = {
   getSession: () => state.session,
   setSession: (u) => { state.session = u; },
   clearSession: () => { state.session = null; },
+  getBrandLogoUrl: () => normalizeBrandLogoUrl(state.brandLogoUrl),
+  saveBrandLogoUrl: (v) => { state.brandLogoUrl = normalizeBrandLogoUrl(v); updateBrandLogos(); },
   getCurrency: () => state.currency || DEFAULT_CURRENCY,
   saveCurrency: (v) => { state.currency = v; },
   getTaxRate: () => state.taxRate,
@@ -154,6 +174,7 @@ const DB = {
     state.customerSummaries = [];
     state.orderHistory = emptyOrderHistoryReport();
     state.cart = emptyCart();
+    state.brandLogoUrl = resolveInitialBrandLogoUrl();
     state.currency = DEFAULT_CURRENCY;
     state.taxRate = 0;
     custCoupon = null;
@@ -194,9 +215,11 @@ const DB = {
     state.admins = data.admins || [];
     state.cashiers = data.cashiers || [];
     state.coupons = data.coupons || [];
+    state.brandLogoUrl = normalizeBrandLogoUrl(data.brandLogoUrl);
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
     state.orderHistory = normalizeOrderHistory(data.orderHistory);
+    updateBrandLogos();
   },
 
   async refreshCustomer() {
@@ -208,9 +231,11 @@ const DB = {
     state.coupons = data.coupons || [];
     state.cart = data.cart || emptyCart();
     state.orderHistory = emptyOrderHistoryReport();
+    state.brandLogoUrl = normalizeBrandLogoUrl(data.brandLogoUrl);
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
     applyCouponSelections();
+    updateBrandLogos();
   },
 
   async refreshCashier() {
@@ -221,8 +246,10 @@ const DB = {
     state.customers = data.customers || [];
     state.coupons = data.coupons || [];
     state.orderHistory = emptyOrderHistoryReport();
+    state.brandLogoUrl = normalizeBrandLogoUrl(data.brandLogoUrl);
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
+    updateBrandLogos();
   }
 };
 
@@ -1324,6 +1351,7 @@ function renderSettings() {
     }
   }
   renderCurrencyCard();
+  renderBrandLogoCard();
   renderCashierAccountsList();
   // Pre-populate tax input
   const taxInput = document.getElementById('tax-input');
@@ -1635,6 +1663,40 @@ const CURRENCIES = [
   'THB|฿|Thai Baht', 'PHP|₱|Philippine Peso', 'IQD|ع.د|Iraqi Dinar',
 ];
 
+function renderBrandLogoCard() {
+  const preview = document.getElementById('brand-logo-preview');
+  const note = document.getElementById('brand-logo-note');
+  if (!preview || !note) return;
+  const logoUrl = DB.getBrandLogoUrl();
+  preview.innerHTML = `<img src="${logoUrl}" alt="POS logo preview">`;
+  note.innerHTML = '<i class="fas fa-check text-green"></i> Current POS logo is active across the main screens and receipts.';
+}
+async function uploadBrandLogo(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('image', file);
+  try {
+    const data = await API.put('/api/admin/settings/logo', form);
+    DB.saveBrandLogoUrl(data.logoUrl);
+    renderBrandLogoCard();
+    toast('POS logo updated', 'success');
+  } catch (err) {
+    toast(err.message || 'Unable to update POS logo', 'error');
+  } finally {
+    input.value = '';
+  }
+}
+async function removeBrandLogo() {
+  try {
+    const data = await API.delete('/api/admin/settings/logo');
+    DB.saveBrandLogoUrl(data.logoUrl);
+    renderBrandLogoCard();
+    toast('Default POS logo restored', 'info');
+  } catch (err) {
+    toast(err.message || 'Unable to reset POS logo', 'error');
+  }
+}
 function renderCurrencyCard() {
   const sel = document.getElementById('currency-select');
   const preview = document.getElementById('currency-preview');
@@ -2558,6 +2620,8 @@ async function submitFeedback() {
 
 // ===== BOOT =====
 document.addEventListener('DOMContentLoaded', async () => {
+  state.brandLogoUrl = resolveInitialBrandLogoUrl();
+  updateBrandLogos();
   await DB.init();
   const session = DB.getSession();
   if (session) {
@@ -2598,7 +2662,7 @@ function showReceipt(id) {
   const currencySymbol = DB.getCurrency().split('|')[1] || '$';
   const afterDiscount = parseFloat(o.subtotal) - parseFloat(o.discount);
   const orderType = o.deliveryName === 'Walk-in Customer' || !o.deliveryName ? 'Dine-in / Takeaway' : 'Delivery';
-  const logoUrl = BRAND_LOGO_EMBEDDED;
+  const logoUrl = DB.getBrandLogoUrl();
   const html = `
     <div id="print-area" style="font-family:'Courier New',monospace;color:#111;background:#fff;padding:24px;border-radius:10px;max-width:440px;margin:0 auto;font-size:14px;line-height:1.5;border:1px solid #ece7dc;">
       <div style="text-align:center; margin-bottom:16px;">
@@ -2689,3 +2753,5 @@ function printElementContent(elementId, title = 'Print') {
   printWindow.print();
   printWindow.close();
 }
+
+

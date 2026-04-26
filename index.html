@@ -53,7 +53,7 @@
     <div class="auth-container">
       <div class="auth-left">
         <div class="auth-brand">
-          <img src="logo.jpeg" alt="Punjabi Cafe Logo" style="height: 140px; margin-bottom: 12px; border-radius: 12px; filter: drop-shadow(0 4px 24px rgba(245,196,0,.25));">
+          <img src="logo.jpeg" alt="Punjabi Cafe Logo" class="brand-logo" style="height: 140px; margin-bottom: 12px; border-radius: 12px; filter: drop-shadow(0 4px 24px rgba(245,196,0,.25));">
           <p>Premium Fast Food Management</p>
         </div>
         <div class="auth-features">
@@ -137,7 +137,7 @@
   <div id="page-admin" class="page hidden">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <img src="logo.jpeg" alt="Punjabi Cafe Logo" style="height: 32px; margin-right: 8px; border-radius: 4px;">
+        <img src="logo.jpeg" alt="Punjabi Cafe Logo" class="brand-logo" style="height: 32px; margin-right: 8px; border-radius: 4px;">
         <span class="sb-name">Punjabi Cafe</span>
         <span class="sb-tag">Admin</span>
       </div>
@@ -357,7 +357,23 @@
                 <select id="currency-select" onchange="saveCurrencySetting(this.value)"></select>
               </div>
             </div>
-            <div class="settings-note" id="currency-preview"></div>
+          <div class="settings-note" id="currency-preview"></div>
+          </div>
+
+          <div class="settings-card">
+            <h3><i class="fas fa-image"></i> POS Logo</h3>
+            <p class="settings-desc">Choose the logo displayed on the main app screens and on receipts.</p>
+            <div class="img-upload-wrap" onclick="document.getElementById('brand-logo-input').click()">
+              <div class="img-upload-preview" id="brand-logo-preview">
+                <div class="img-upload-placeholder"><i class="fas fa-camera"></i><span>Click to upload logo</span></div>
+              </div>
+            </div>
+            <input type="file" id="brand-logo-input" accept="image/*" style="display:none" onchange="uploadBrandLogo(this)">
+            <div class="settings-actions" style="margin-top:16px">
+              <button class="btn-outline" onclick="document.getElementById('brand-logo-input').click()"><i class="fas fa-image"></i> Select Logo</button>
+              <button class="btn-danger" onclick="removeBrandLogo()"><i class="fas fa-trash"></i> Use Default Logo</button>
+            </div>
+            <div class="settings-note" id="brand-logo-note"><i class="fas fa-info-circle"></i> The selected logo will appear on the main screens and receipts.</div>
           </div>
 
           <!-- Tax Rate -->
@@ -398,7 +414,7 @@
   <!-- ========== CUSTOMER PAGE ========== -->
   <div id="page-customer" class="page hidden">
     <header class="cust-header">
-      <div class="cust-brand"><img src="logo.jpeg" alt="Punjabi Cafe Logo" style="height: 32px; margin-right: 8px; border-radius: 4px;"><span>Punjabi Cafe</span></div>
+      <div class="cust-brand"><img src="logo.jpeg" alt="Punjabi Cafe Logo" class="brand-logo" style="height: 32px; margin-right: 8px; border-radius: 4px;"><span>Punjabi Cafe</span></div>
       <nav class="cust-nav">
         <button class="cnav-btn active" id="cnav-home" onclick="custNav('home')"><i class="fas fa-utensils"></i>
           Menu</button>
@@ -575,7 +591,7 @@
   <!-- ========== CASHIER / POS PAGE ========== -->
   <div id="page-cashier" class="page hidden">
     <header class="cashier-header">
-      <div class="cashier-brand"><img src="logo.jpeg" alt="Punjabi Cafe Logo" style="height: 32px; margin-right: 8px; border-radius: 4px;"><span>Punjabi Cafe</span><span class="cashier-tag">POS Terminal</span></div>
+      <div class="cashier-brand"><img src="logo.jpeg" alt="Punjabi Cafe Logo" class="brand-logo" style="height: 32px; margin-right: 8px; border-radius: 4px;"><span>Punjabi Cafe</span><span class="cashier-tag">POS Terminal</span></div>
       <nav class="pos-nav">
         <button class="pos-nav-btn active" id="posnav-order" onclick="posNav('order')"><i
             class="fas fa-cash-register"></i> New Order</button>
