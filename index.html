@@ -146,6 +146,7 @@
           Dashboard</a>
         <a class="nav-item" id="nav-menu" onclick="adminNav('menu')"><i class="fas fa-utensils"></i> Menu Items</a>
         <a class="nav-item" id="nav-orders" onclick="adminNav('orders')"><i class="fas fa-shopping-bag"></i> Orders</a>
+        <a class="nav-item" id="nav-reports" onclick="adminNav('reports')"><i class="fas fa-chart-pie"></i> Reports</a>
         <a class="nav-item" id="nav-customers" onclick="adminNav('customers')"><i class="fas fa-users"></i>
           Customers</a>
         <a class="nav-item" id="nav-feedback" onclick="adminNav('feedback')"><i class="fas fa-comments"></i>
@@ -257,6 +258,18 @@
           </div>
           <div id="order-history-report"></div>
         </div>
+      </section>
+
+      <!-- REPORTS -->
+      <section id="sec-reports" class="admin-sec hidden">
+        <div class="sec-header">
+          <div>
+            <h2>Reports</h2>
+            <p>Daily, weekly and monthly order reports using the 4 AM business-day reset.</p>
+          </div>
+          <button class="btn-primary" onclick="refreshOrderHistoryReportData(true)"><i class="fas fa-rotate-right"></i> Refresh Reports</button>
+        </div>
+        <div id="reports-history-report"></div>
       </section>
 
       <!-- CUSTOMERS -->
