@@ -261,6 +261,17 @@ function fmtPrice(n) {
   const sym = DB.getCurrency().split('|')[1] || '$';
   return sym + parseFloat(n).toFixed(2);
 }
+function isInCurrentBusinessDay(iso, reference = new Date(), cutoffHour = 4) {
+  if (!iso) return false;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return false;
+  const start = new Date(reference);
+  start.setHours(cutoffHour, 0, 0, 0);
+  if (reference < start) start.setDate(start.getDate() - 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return date >= start && date < end;
+}
 function isSuperAdmin() { const s = DB.getSession(); return !!(s && s.isSuperAdmin); }
 function effectiveMenuPrice(item) {
   return Math.max(0, parseFloat(item?.price || 0) - parseFloat(item?.discount || 0));
@@ -452,15 +463,21 @@ function renderDashboard() {
   }
 
   // Top items
+  const now = new Date();
   const counts = {};
-  orders.forEach(o => o.items.forEach(i => { counts[i.name] = (counts[i.name] || 0) + i.qty; }));
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  orders
+    .filter(o => isInCurrentBusinessDay(o.createdAt, now) && o.status !== 'Cancelled')
+    .forEach(o => o.items.forEach(i => {
+      counts[i.name] = (counts[i.name] || 0) + i.qty;
+    }));
+  const sorted = items
+    .map((item, index) => ({ item, index, count: counts[item.name] || 0 }))
+    .sort((a, b) => b.count - a.count || a.index - b.index);
   const ti = document.getElementById('top-items');
-  if (!sorted.length) { ti.innerHTML = '<div style="color:var(--text3);font-size:.85rem;padding:10px 0">No sales yet.</div>'; }
+  if (!sorted.length) { ti.innerHTML = '<div style="color:var(--text3);font-size:.85rem;padding:10px 0">No menu items yet.</div>'; }
   else {
-    ti.innerHTML = sorted.map(([name, cnt]) => {
-      const it = items.find(i => i.name === name);
-      return `<div class="top-row"><span class="top-icon">${it ? it.icon : '🍽️'}</span><span class="top-name">${name}</span><span class="top-count">${cnt} sold</span></div>`;
+    ti.innerHTML = sorted.map(({ item, count }) => {
+      return `<div class="top-row"><span class="top-icon">${item.icon || ''}</span><span class="top-name">${item.name}</span><span class="top-price">${fmtPrice(item.price)}</span><span class="top-count">${count} sold</span></div>`;
     }).join('');
   }
 }

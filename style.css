@@ -893,6 +893,13 @@ textarea:focus {
   font-weight: 500;
 }
 
+.top-price {
+  color: var(--text2);
+  font-size: .8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .top-count {
   background: var(--yglow);
   color: var(--yellow);
