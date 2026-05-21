@@ -31,6 +31,7 @@ public class SecurityConfig {
                 .requestMatchers("/", "/index.html", "/style.css", "/app.js", "/uploads/**", "/favicon.ico", "/*.jpg", "/*.jpeg", "/*.png", "/*.webp", "/*.svg" ).permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/company-config", "/api/company-logo").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/menu-items").permitAll()
                 .requestMatchers("/api/menu-items/**").hasRole("ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

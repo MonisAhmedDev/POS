@@ -71,6 +71,8 @@ record OrderResponse(
     BigDecimal tax,
     BigDecimal total,
     String couponCode,
+    String manualDiscountType,
+    BigDecimal manualDiscountValue,
     String paymentMethod,
     String deliveryName,
     String phone,
@@ -172,6 +174,8 @@ record PosOrderItemRequest(
 record PosOrderRequest(
     String customerName,
     String couponCode,
+    String discountType,
+    BigDecimal discountValue,
     @NotBlank String paymentMethod,
     @NotEmpty List<PosOrderItemRequest> items
 ) {
@@ -214,14 +218,18 @@ record AdminAccountResponse(
 record StaffCreateRequest(
     @NotBlank String name,
     @Email @NotBlank String email,
-    @Size(min = 6) String password
+    @Size(min = 6) String password,
+    String discountType,
+    BigDecimal discountValue
 ) {
 }
 
 record StaffUpdateRequest(
     @NotBlank String name,
     @Email @NotBlank String email,
-    String password
+    String password,
+    String discountType,
+    BigDecimal discountValue
 ) {
 }
 
@@ -276,7 +284,9 @@ record AdminBootstrapResponse(
     String currency,
     BigDecimal taxRate,
     String brandLogoUrl,
-    OrderHistoryReportResponse orderHistory
+    OrderHistoryReportResponse orderHistory,
+    String companyName,
+    String companyLogoUrl
 ) {
 }
 
@@ -289,7 +299,9 @@ record CustomerBootstrapResponse(
     List<CouponResponse> coupons,
     String currency,
     BigDecimal taxRate,
-    String brandLogoUrl
+    String brandLogoUrl,
+    String companyName,
+    String companyLogoUrl
 ) {
 }
 
@@ -301,7 +313,9 @@ record CashierBootstrapResponse(
     List<CouponResponse> coupons,
     String currency,
     BigDecimal taxRate,
-    String brandLogoUrl
+    String brandLogoUrl,
+    String companyName,
+    String companyLogoUrl
 ) {
 }
 
@@ -383,6 +397,8 @@ record BackupOrderRecord(
     BigDecimal tax,
     BigDecimal total,
     String couponCode,
+    String manualDiscountType,
+    BigDecimal manualDiscountValue,
     String paymentMethod,
     String deliveryName,
     String phone,

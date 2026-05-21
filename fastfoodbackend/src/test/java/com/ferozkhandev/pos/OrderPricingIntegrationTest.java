@@ -81,6 +81,8 @@ class OrderPricingIntegrationTest {
         OrderResponse updated = orderService.updateAdminOrder(original.id(), new PosOrderRequest(
             customer.getName(),
             null,
+            null,
+            null,
             "Card",
             List.of(new PosOrderItemRequest(drink.getId(), 3))
         ));
@@ -110,6 +112,8 @@ class OrderPricingIntegrationTest {
         OrderResponse order = orderService.createPosOrder(cashier, new PosOrderRequest(
             customer.getName(),
             null,
+            null,
+            null,
             "Cash",
             List.of(new PosOrderItemRequest(burger.getId(), 2))
         ));
@@ -119,6 +123,42 @@ class OrderPricingIntegrationTest {
         assertThat(order.discount()).isEqualByComparingTo("2.00");
         assertThat(order.tax()).isEqualByComparingTo("0.00");
         assertThat(order.total()).isEqualByComparingTo("18.00");
+    }
+
+    @Test
+    void cashierCanApplyAndEditManualBillDiscounts() {
+        UserAccount cashier = saveUser("Discount Cashier", "discount-cashier@example.com", Role.CASHIER);
+        MenuItem platter = saveMenuItem("Family Platter", "Burgers", "50.00", "0.00");
+
+        OrderResponse order = orderService.createPosOrder(cashier, new PosOrderRequest(
+            "Walk-in Customer",
+            null,
+            "fixed",
+            new BigDecimal("5.00"),
+            "Cash",
+            List.of(new PosOrderItemRequest(platter.getId(), 1))
+        ));
+
+        assertThat(order.subtotal()).isEqualByComparingTo("50.00");
+        assertThat(order.discount()).isEqualByComparingTo("5.00");
+        assertThat(order.manualDiscountType()).isEqualTo("fixed");
+        assertThat(order.manualDiscountValue()).isEqualByComparingTo("5.00");
+        assertThat(order.total()).isEqualByComparingTo("45.00");
+
+        OrderResponse updated = orderService.updatePosOrder(cashier, order.id(), new PosOrderRequest(
+            "Walk-in Customer",
+            null,
+            "percentage",
+            new BigDecimal("10.00"),
+            "Card",
+            List.of(new PosOrderItemRequest(platter.getId(), 2))
+        ));
+
+        assertThat(updated.subtotal()).isEqualByComparingTo("100.00");
+        assertThat(updated.discount()).isEqualByComparingTo("10.00");
+        assertThat(updated.manualDiscountType()).isEqualTo("percentage");
+        assertThat(updated.manualDiscountValue()).isEqualByComparingTo("10.00");
+        assertThat(updated.total()).isEqualByComparingTo("90.00");
     }
 
     private UserAccount saveUser(String name, String email, Role role) {

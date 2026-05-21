@@ -32,7 +32,9 @@ public class UserManagementService {
     }
 
     public AdminAccountResponse createCustomer(StaffCreateRequest request) {
-        return apiMapper.toAccount(createUser(request, Role.CUSTOMER, false));
+        UserAccount user = createUser(request, Role.CUSTOMER, false);
+        applyRestaurantDiscount(user, request.discountType(), request.discountValue());
+        return apiMapper.toAccount(userAccountRepository.save(user));
     }
 
     public AdminAccountResponse updateCustomer(String userId, StaffUpdateRequest request) {
@@ -54,6 +56,7 @@ public class UserManagementService {
             }
             user.setPasswordHash(passwordEncoder.encode(request.password()));
         }
+        applyRestaurantDiscount(user, request.discountType(), request.discountValue());
         return apiMapper.toAccount(userAccountRepository.save(user));
     }
 
@@ -188,7 +191,11 @@ public class UserManagementService {
             user.setRestaurantDiscountValue(MoneyUtils.ZERO);
             return;
         }
-        user.setRestaurantDiscountType(parseDiscountType(discountType));
+        DiscountType type = parseDiscountType(discountType);
+        if (type == DiscountType.PERCENTAGE && value.compareTo(new BigDecimal("100")) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Percentage discount cannot exceed 100.");
+        }
+        user.setRestaurantDiscountType(type);
         user.setRestaurantDiscountValue(value);
     }
 

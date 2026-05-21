@@ -18,12 +18,24 @@ public class PricingService {
     }
 
     public CartTotals calculate(List<PricingLineItem> items, Coupon coupon, UserAccount customer, boolean includeDelivery) {
+        return calculate(items, coupon, customer, null, MoneyUtils.ZERO, includeDelivery);
+    }
+
+    public CartTotals calculate(
+        List<PricingLineItem> items,
+        Coupon coupon,
+        UserAccount customer,
+        DiscountType manualDiscountType,
+        BigDecimal manualDiscountValue,
+        boolean includeDelivery
+    ) {
         BigDecimal subtotal = items.stream()
             .map(item -> MoneyUtils.multiply(item.price(), item.quantity()))
             .reduce(MoneyUtils.ZERO, BigDecimal::add);
         BigDecimal customerDiscount = calculateCustomerDiscount(subtotal, customer);
         BigDecimal couponDiscount = calculateDiscount(items, coupon, false);
-        BigDecimal discount = MoneyUtils.money(customerDiscount.add(couponDiscount).min(subtotal));
+        BigDecimal manualDiscount = calculateDirectDiscount(subtotal, manualDiscountType, manualDiscountValue);
+        BigDecimal discount = MoneyUtils.money(customerDiscount.add(couponDiscount).add(manualDiscount).min(subtotal));
         BigDecimal delivery = includeDelivery && subtotal.compareTo(MoneyUtils.ZERO) > 0 ? MoneyUtils.DELIVERY_FEE : MoneyUtils.ZERO;
         BigDecimal taxable = subtotal.subtract(discount).max(MoneyUtils.ZERO);
         BigDecimal tax = MoneyUtils.money(taxable.multiply(settingsService.getTaxRate()));
@@ -44,6 +56,16 @@ public class PricingService {
             return MoneyUtils.ZERO;
         }
         BigDecimal discount = customer.getRestaurantDiscountType() == DiscountType.PERCENTAGE
+            ? subtotal.multiply(value).divide(new BigDecimal("100"))
+            : subtotal.min(value);
+        return MoneyUtils.money(discount);
+    }
+
+    private BigDecimal calculateDirectDiscount(BigDecimal subtotal, DiscountType type, BigDecimal value) {
+        if (type == null || value == null || value.compareTo(MoneyUtils.ZERO) <= 0 || subtotal.compareTo(MoneyUtils.ZERO) <= 0) {
+            return MoneyUtils.ZERO;
+        }
+        BigDecimal discount = type == DiscountType.PERCENTAGE
             ? subtotal.multiply(value).divide(new BigDecimal("100"))
             : subtotal.min(value);
         return MoneyUtils.money(discount);

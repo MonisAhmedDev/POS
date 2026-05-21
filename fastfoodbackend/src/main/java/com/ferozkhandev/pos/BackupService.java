@@ -74,6 +74,8 @@ public class BackupService {
                 order.getTax(),
                 order.getTotal(),
                 order.getCouponCode(),
+                order.getManualDiscountType() != null ? order.getManualDiscountType().name().toLowerCase() : null,
+                order.getManualDiscountValue(),
                 order.getPaymentMethod().name(),
                 order.getDeliveryName(),
                 order.getPhone(),
@@ -180,6 +182,12 @@ public class BackupService {
             order.setTax(record.tax());
             order.setTotal(record.total());
             order.setCouponCode(record.couponCode());
+            order.setManualDiscountType(record.manualDiscountType() != null
+                ? DiscountType.valueOf(record.manualDiscountType().toUpperCase())
+                : null);
+            order.setManualDiscountValue(record.manualDiscountValue() != null
+                ? record.manualDiscountValue()
+                : java.math.BigDecimal.ZERO);
             order.setPaymentMethod(PaymentMethod.valueOf(record.paymentMethod().toUpperCase()));
             order.setDeliveryName(record.deliveryName());
             order.setPhone(record.phone());

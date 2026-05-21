@@ -2,6 +2,7 @@ package com.ferozkhandev.pos;
 
 import com.ferozkhandev.pos.DomainEnums.OrderStatus;
 import com.ferozkhandev.pos.DomainEnums.PaymentMethod;
+import com.ferozkhandev.pos.DomainEnums.DiscountType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -57,6 +58,13 @@ public class ShopOrder extends BaseEntity {
 
     @Column(name = "coupon_code", length = 64)
     private String couponCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_discount_type", length = 32)
+    private DiscountType manualDiscountType;
+
+    @Column(name = "manual_discount_value", nullable = false, precision = 10, scale = 2)
+    private BigDecimal manualDiscountValue = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 32)

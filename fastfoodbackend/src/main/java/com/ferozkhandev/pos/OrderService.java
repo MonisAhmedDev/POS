@@ -3,6 +3,7 @@ package com.ferozkhandev.pos;
 import com.ferozkhandev.pos.DomainEnums.OrderStatus;
 import com.ferozkhandev.pos.DomainEnums.PaymentMethod;
 import com.ferozkhandev.pos.DomainEnums.Role;
+import com.ferozkhandev.pos.DomainEnums.DiscountType;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +76,15 @@ public class OrderService {
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        CartTotals totals = pricingService.calculate(pricingItems, coupon, customer, false);
+        ManualDiscount manualDiscount = resolveManualDiscount(request.discountType(), request.discountValue(), null, MoneyUtils.ZERO);
+        CartTotals totals = pricingService.calculate(
+            pricingItems,
+            coupon,
+            customer,
+            manualDiscount.type(),
+            manualDiscount.value(),
+            false
+        );
         String customerName = StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Walk-in Customer";
 
         ShopOrder order = new ShopOrder();
@@ -89,6 +98,8 @@ public class OrderService {
         order.setTax(totals.tax());
         order.setTotal(totals.total());
         order.setCouponCode(coupon != null ? coupon.getCode() : null);
+        order.setManualDiscountType(manualDiscount.type());
+        order.setManualDiscountValue(manualDiscount.value());
         order.setPaymentMethod(parsePaymentMethod(request.paymentMethod()));
         order.setDeliveryName(customerName);
         order.setPhone(null);
@@ -117,7 +128,20 @@ public class OrderService {
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        CartTotals totals = pricingService.calculate(pricingItems, coupon, customer, includesDelivery(order));
+        ManualDiscount manualDiscount = resolveManualDiscount(
+            request.discountType(),
+            request.discountValue(),
+            order.getManualDiscountType(),
+            order.getManualDiscountValue()
+        );
+        CartTotals totals = pricingService.calculate(
+            pricingItems,
+            coupon,
+            customer,
+            manualDiscount.type(),
+            manualDiscount.value(),
+            includesDelivery(order)
+        );
         order.setCustomer(customer);
         if (customer != null) {
             order.setCustomerName(customer.getName());
@@ -137,6 +161,8 @@ public class OrderService {
         order.setTax(totals.tax());
         order.setTotal(totals.total());
         order.setCouponCode(coupon != null ? coupon.getCode() : null);
+        order.setManualDiscountType(manualDiscount.type());
+        order.setManualDiscountValue(manualDiscount.value());
         order.setPaymentMethod(parsePaymentMethod(request.paymentMethod()));
         order.getItems().clear();
         newItems.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
@@ -189,7 +215,20 @@ public class OrderService {
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        CartTotals totals = pricingService.calculate(pricingItems, coupon, customer, false);
+        ManualDiscount manualDiscount = resolveManualDiscount(
+            request.discountType(),
+            request.discountValue(),
+            order.getManualDiscountType(),
+            order.getManualDiscountValue()
+        );
+        CartTotals totals = pricingService.calculate(
+            pricingItems,
+            coupon,
+            customer,
+            manualDiscount.type(),
+            manualDiscount.value(),
+            false
+        );
         order.setCustomer(customer);
         order.setCustomerName(customer != null ? customer.getName() : (StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Walk-in Customer"));
         order.setSubtotal(totals.subtotal());
@@ -198,6 +237,8 @@ public class OrderService {
         order.setTax(totals.tax());
         order.setTotal(totals.total());
         order.setCouponCode(coupon != null ? coupon.getCode() : null);
+        order.setManualDiscountType(manualDiscount.type());
+        order.setManualDiscountValue(manualDiscount.value());
         order.setPaymentMethod(parsePaymentMethod(request.paymentMethod()));
         order.setCashier(cashier);
         order.setCashierName(cashier.getName());
@@ -265,6 +306,40 @@ public class OrderService {
         return order.getDelivery() != null && order.getDelivery().compareTo(MoneyUtils.ZERO) > 0;
     }
 
+    private ManualDiscount resolveManualDiscount(
+        String requestedType,
+        BigDecimal requestedValue,
+        DiscountType fallbackType,
+        BigDecimal fallbackValue
+    ) {
+        if (requestedType == null && requestedValue == null && fallbackType != null) {
+            return new ManualDiscount(fallbackType, MoneyUtils.money(fallbackValue != null ? fallbackValue : MoneyUtils.ZERO));
+        }
+        if (!StringUtils.hasText(requestedType) || "none".equalsIgnoreCase(requestedType)) {
+            return new ManualDiscount(null, MoneyUtils.ZERO);
+        }
+        DiscountType type = parseDiscountType(requestedType);
+        BigDecimal value = requestedValue != null ? MoneyUtils.money(requestedValue) : MoneyUtils.ZERO;
+        if (value.compareTo(MoneyUtils.ZERO) < 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Discount value cannot be negative.");
+        }
+        if (type == DiscountType.PERCENTAGE && value.compareTo(new BigDecimal("100")) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Percentage discount cannot exceed 100.");
+        }
+        if (value.compareTo(MoneyUtils.ZERO) == 0) {
+            return new ManualDiscount(null, MoneyUtils.ZERO);
+        }
+        return new ManualDiscount(type, value);
+    }
+
+    private DiscountType parseDiscountType(String value) {
+        return switch (value.toLowerCase()) {
+            case "percentage" -> DiscountType.PERCENTAGE;
+            case "fixed" -> DiscountType.FIXED;
+            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported discount type");
+        };
+    }
+
     private PaymentMethod parsePaymentMethod(String value) {
         return switch (value.toLowerCase()) {
             case "cash" -> PaymentMethod.CASH;
@@ -285,4 +360,7 @@ public class OrderService {
 }
 
 record MenuItemQuantity(MenuItem menuItem, int quantity) {
+}
+
+record ManualDiscount(DiscountType type, BigDecimal value) {
 }

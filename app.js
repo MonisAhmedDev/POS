@@ -38,7 +38,9 @@ const state = {
   cart: { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null },
   brandLogoUrl: '',
   currency: DEFAULT_CURRENCY,
-  taxRate: 0.00
+  taxRate: 0.00,
+  companyName: 'Panjabi Cafe',
+  companyLogoUrl: '/api/company-logo'
 };
 
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? `http://${window.location.hostname}:8080` : (window.location.protocol === 'file:' ? 'http://localhost:8080' : '');
@@ -132,6 +134,19 @@ function updateBrandLogos() {
   });
 }
 
+function updateCompanyBranding() {
+  const name = state.companyName || 'Panjabi Cafe';
+  const logoUrl = state.companyLogoUrl || '/api/company-logo';
+  document.querySelectorAll('.company-name').forEach(el => {
+    el.textContent = name;
+  });
+  document.querySelectorAll('.company-logo').forEach(img => {
+    img.src = resolveAppAssetUrl(logoUrl);
+    img.alt = name + ' Logo';
+  });
+  document.title = name + ' — Fast Food Shop';
+}
+
 const DB = {
   getUsers: () => [...state.admins, ...state.cashiers, ...state.customers],
   saveUsers: (d) => {
@@ -161,6 +176,10 @@ const DB = {
   saveCurrency: (v) => { state.currency = v; },
   getTaxRate: () => state.taxRate,
   saveTaxRate: (v) => { state.taxRate = parseFloat(v) || 0; },
+  getCompanyName: () => state.companyName || 'Panjabi Cafe',
+  saveCompanyName: (v) => { state.companyName = v || 'Panjabi Cafe'; },
+  getCompanyLogoUrl: () => state.companyLogoUrl || '/api/company-logo',
+  saveCompanyLogoUrl: (v) => { state.companyLogoUrl = v || '/api/company-logo'; },
 
   reset() {
     state.session = null;
@@ -177,16 +196,29 @@ const DB = {
     state.brandLogoUrl = resolveInitialBrandLogoUrl();
     state.currency = DEFAULT_CURRENCY;
     state.taxRate = 0;
+    state.companyName = 'Panjabi Cafe';
+    state.companyLogoUrl = '/api/company-logo';
     custCoupon = null;
   },
 
   async init() {
     try {
+      await this.loadCompanyConfig();
       state.session = await API.get('/api/auth/me');
       await this.refreshForSession();
     } catch {
       this.reset();
+      await this.loadCompanyConfig();
     }
+  },
+
+  async loadCompanyConfig() {
+    try {
+      const cfg = await API.get('/api/company-config');
+      state.companyName = cfg.companyName || 'Panjabi Cafe';
+      state.companyLogoUrl = resolveAppAssetUrl(cfg.companyLogoUrl || '/api/company-logo');
+      updateCompanyBranding();
+    } catch { /* use defaults */ }
   },
 
   async refreshForSession() {
@@ -219,7 +251,10 @@ const DB = {
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
     state.orderHistory = normalizeOrderHistory(data.orderHistory);
+    state.companyName = data.companyName || state.companyName;
+    state.companyLogoUrl = resolveAppAssetUrl(data.companyLogoUrl || '/api/company-logo');
     updateBrandLogos();
+    updateCompanyBranding();
   },
 
   async refreshCustomer() {
@@ -234,8 +269,11 @@ const DB = {
     state.brandLogoUrl = normalizeBrandLogoUrl(data.brandLogoUrl);
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
+    state.companyName = data.companyName || state.companyName;
+    state.companyLogoUrl = resolveAppAssetUrl(data.companyLogoUrl || '/api/company-logo');
     applyCouponSelections();
     updateBrandLogos();
+    updateCompanyBranding();
   },
 
   async refreshCashier() {
@@ -249,7 +287,10 @@ const DB = {
     state.brandLogoUrl = normalizeBrandLogoUrl(data.brandLogoUrl);
     state.currency = data.currency || DEFAULT_CURRENCY;
     state.taxRate = data.taxRate || 0;
+    state.companyName = data.companyName || state.companyName;
+    state.companyLogoUrl = resolveAppAssetUrl(data.companyLogoUrl || '/api/company-logo');
     updateBrandLogos();
+    updateCompanyBranding();
   }
 };
 
@@ -803,7 +844,7 @@ function showHistoryBucketReport(periodType, periodStart) {
     <div id="history-report-print-area" style="font-family:Segoe UI,Arial,sans-serif;color:#111;background:#fff;padding:24px;border-radius:14px;max-width:760px;margin:0 auto;border:1px solid #ece7dc;">
       <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px;">
         <div>
-          <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#8a6d3b;font-weight:700;">Punjabi Cafe</div>
+          <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#8a6d3b;font-weight:700;">${DB.getCompanyName()}</div>
           <h2 style="margin:6px 0 4px;font-size:28px;">${bucket.label}</h2>
           <div style="color:#555;">${formatHistoryWindow(bucket.periodStart, bucket.periodEnd)}</div>
           <div style="color:#777;margin-top:6px;">Business day resets at ${report.businessDayCutoffHour ?? 4}:00 AM${report.timezone ? ` (${report.timezone})` : ''}</div>
@@ -1836,6 +1877,7 @@ async function confirmDeleteCashier(id) {
 let posCat = '';
 let posCart = [];
 let posCoupon = null;
+let posManualDiscount = { type: 'none', value: 0 };
 let posEditOrderId = null;
 
 async function loadCashier(refresh = true) {
@@ -1846,6 +1888,7 @@ async function loadCashier(refresh = true) {
   showPage('page-cashier');
   posCart = [];
   posCoupon = null;
+  posManualDiscount = { type: 'none', value: 0 };
   posEditOrderId = null;
   buildPosCatTabs();
   renderPosMenu();
@@ -1937,6 +1980,7 @@ function renderCashierOrders() {
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:1.2rem;font-weight:800;color:var(--yellow)">${fmtPrice(o.total)}</div>
+          ${o.discount > 0 ? `<div style="font-size:.76rem;color:var(--text3)">${orderDiscountLabel(o)} -${fmtPrice(o.discount)}</div>` : ''}
           <div style="font-size:.78rem;color:var(--text3)">${o.items.reduce((s, i) => s + i.qty, 0)} items</div>
         </div>
       </div>
@@ -2041,15 +2085,45 @@ function applyPosCoupon() {
 
 function removePosCoupon() { posCoupon = null; renderPosCart(); }
 
+function syncPosManualDiscountFromInputs() {
+  const typeInput = document.getElementById('pos-discount-type');
+  const valueInput = document.getElementById('pos-discount-value');
+  if (typeInput) posManualDiscount.type = typeInput.value || 'none';
+  if (valueInput) posManualDiscount.value = parseFloat(valueInput.value || '0') || 0;
+  if (posManualDiscount.type === 'none') posManualDiscount.value = 0;
+}
+
+function updatePosManualDiscount() {
+  syncPosManualDiscountFromInputs();
+  renderPosCart();
+}
+
+function posManualDiscountLabel(type, value) {
+  const amount = parseFloat(value || 0);
+  if (!type || type === 'none' || amount <= 0) return '';
+  return type === 'percentage' ? `${amount}% cashier discount` : `${fmtPrice(amount)} cashier discount`;
+}
+
+function orderDiscountLabel(order) {
+  const parts = [];
+  if (order?.couponCode) parts.push(order.couponCode);
+  if (order?.manualDiscountType && parseFloat(order?.manualDiscountValue || 0) > 0) parts.push('cashier');
+  return parts.length ? `Discount (${parts.join(' + ')})` : 'Restaurant Discount';
+}
+
 function renderPosCart() {
   const itemsEl = document.getElementById('pos-order-items');
   const footerEl = document.getElementById('pos-order-footer');
   const currentPayment = document.getElementById('pos-payment')?.value || 'Cash';
   const currentPromoValue = document.getElementById('pos-promo')?.value || '';
+  syncPosManualDiscountFromInputs();
+  const currentDiscountType = posManualDiscount.type || 'none';
+  const currentDiscountValue = parseFloat(posManualDiscount.value || 0) || 0;
   if (!posCart.length) {
     itemsEl.innerHTML = '<div class="pos-empty-order"><i class="fas fa-shopping-bag"></i><p>Add items from the menu</p></div>';
     footerEl.innerHTML = '';
     posCoupon = null;
+    posManualDiscount = { type: 'none', value: 0 };
     return;
   }
   itemsEl.innerHTML = posCart.map(c => `
@@ -2091,7 +2165,9 @@ function renderPosCart() {
 
   const customer = findCustomerByName(document.getElementById('pos-customer')?.value || '');
   const customerDiscount = calculateDirectDiscount(customer?.restaurantDiscountType, customer?.restaurantDiscountValue, subtotal);
-  const totalDiscount = Math.min(subtotal, discount + customerDiscount);
+  const manualDiscountRaw = calculateDirectDiscount(currentDiscountType, currentDiscountValue, subtotal);
+  const manualDiscount = Math.min(Math.max(0, subtotal - discount - customerDiscount), manualDiscountRaw);
+  const totalDiscount = Math.min(subtotal, discount + customerDiscount + manualDiscount);
 
   const delivery = 0;
   const taxRate = state.taxRate || 0;
@@ -2103,6 +2179,7 @@ function renderPosCart() {
       <div class="pos-total-row"><span>Subtotal</span><span>${fmtPrice(subtotal)}</span></div>
       ${discount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>Discount (${posCoupon.code})</span><span>-${fmtPrice(discount)} <i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removePosCoupon()"></i></span></div>` : ''}
       ${customerDiscount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>${formatCustomerDiscount(customer.restaurantDiscountType, customer.restaurantDiscountValue)}</span><span>-${fmtPrice(customerDiscount)}</span></div>` : ''}
+      ${manualDiscount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>${posManualDiscountLabel(currentDiscountType, currentDiscountValue)}</span><span>-${fmtPrice(manualDiscount)}</span></div>` : ''}
       <div class="pos-total-row"><span>${formatTaxLabel(taxRate)}</span><span>${fmtPrice(tax)}</span></div>
       <div class="pos-total-row pos-grand-total"><span>TOTAL</span><span>${fmtPrice(total)}</span></div>
     </div>
@@ -2112,6 +2189,25 @@ function renderPosCart() {
         <div class="inp-wrap" style="margin:0;flex:1"><i class="fas fa-tag"></i><input type="text" id="pos-promo" value="${currentPromoValue}" placeholder="Promo code" style="padding:6px 10px 6px 32px"></div>
         <button class="btn-outline btn-sm" onclick="applyPosCoupon()">Apply</button>
       </div>` : ''}
+
+    <div class="pos-pay-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <label style="font-size:.8rem;color:var(--text3)">Bill Discount</label>
+        <div class="inp-wrap" style="margin:6px 0 0"><i class="fas fa-tag"></i>
+          <select id="pos-discount-type" onchange="updatePosManualDiscount()">
+            <option value="none" ${currentDiscountType === 'none' ? 'selected' : ''}>None</option>
+            <option value="percentage" ${currentDiscountType === 'percentage' ? 'selected' : ''}>Percent</option>
+            <option value="fixed" ${currentDiscountType === 'fixed' ? 'selected' : ''}>Amount</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:.8rem;color:var(--text3)">Value</label>
+        <div class="inp-wrap" style="margin:6px 0 0"><i class="fas fa-coins"></i>
+          <input type="number" id="pos-discount-value" value="${currentDiscountValue || ''}" min="0" step="0.01" ${currentDiscountType === 'none' ? 'disabled' : ''} oninput="updatePosManualDiscount()">
+        </div>
+      </div>
+    </div>
 
     <div class="pos-pay-row">
       <label style="font-size:.8rem;color:var(--text3)">Payment Method</label>
@@ -2131,11 +2227,20 @@ async function placePosOrder() {
   if (!posCart.length) { toast('Cart is empty', 'error'); return; }
   const customerName = document.getElementById('pos-customer').value.trim() || 'Walk-in Customer';
   const payment = document.getElementById('pos-payment')?.value || 'Cash';
+  syncPosManualDiscountFromInputs();
+  const manualDiscountType = posManualDiscount.type !== 'none' ? posManualDiscount.type : null;
+  const manualDiscountValue = manualDiscountType ? (parseFloat(posManualDiscount.value || 0) || 0) : 0;
+  if (manualDiscountType === 'percentage' && manualDiscountValue > 100) {
+    toast('Percentage discount cannot exceed 100%', 'error');
+    return;
+  }
   const editId = posEditOrderId;
   try {
     const body = {
       customerName,
       couponCode: posCoupon ? posCoupon.code : null,
+      discountType: manualDiscountType,
+      discountValue: manualDiscountValue,
       paymentMethod: payment,
       items: posCart.map(c => ({ id: c.id, qty: c.qty }))
     };
@@ -2148,6 +2253,7 @@ async function placePosOrder() {
     await DB.refreshCashier();
     posCart = [];
     posCoupon = null;
+    posManualDiscount = { type: 'none', value: 0 };
     posEditOrderId = null;
     document.getElementById('pos-customer').value = '';
     renderPosCart();
@@ -2164,6 +2270,7 @@ async function placePosOrder() {
 function clearPosCart() {
   posCart = [];
   posCoupon = null;
+  posManualDiscount = { type: 'none', value: 0 };
   posEditOrderId = null;
   renderPosCart();
 }
@@ -2176,7 +2283,11 @@ function editPosOrder(orderId) {
     const menuItem = DB.getItems().find(m => m.id === i.id) || {};
     return { ...menuItem, id: i.id, name: i.name, price: parseFloat(i.price), icon: i.icon || '🍽️', category: i.category, qty: i.qty };
   });
-  posCoupon = null;
+  posCoupon = o.couponCode ? DB.getCoupons().find(c => c.code === o.couponCode && c.status === 'Active') || null : null;
+  posManualDiscount = {
+    type: o.manualDiscountType || 'none',
+    value: parseFloat(o.manualDiscountValue || 0) || 0
+  };
   posEditOrderId = orderId;
   document.getElementById('pos-customer').value = o.customerName || '';
   posNav('order');
@@ -2191,6 +2302,37 @@ function renderCashierCustomersDL() {
   if (dl) dl.innerHTML = users.map(u => `<option value="${u.name}"></option>`).join('');
 }
 
+function cashierCustomerDiscountFields(prefix, type = 'none', value = 0) {
+  const normalizedType = type || 'none';
+  const amount = parseFloat(value || 0) || 0;
+  return `
+    <div class="form-group">
+      <label>Customer Discount</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="inp-wrap"><i class="fas fa-tag"></i>
+          <select id="${prefix}-discount-type">
+            <option value="none" ${normalizedType === 'none' ? 'selected' : ''}>No Discount</option>
+            <option value="percentage" ${normalizedType === 'percentage' ? 'selected' : ''}>Percentage (%)</option>
+            <option value="fixed" ${normalizedType === 'fixed' ? 'selected' : ''}>Fixed Amount</option>
+          </select>
+        </div>
+        <div class="inp-wrap"><i class="fas fa-coins"></i>
+          <input type="number" id="${prefix}-discount-value" min="0" step="0.01" value="${amount || 0}">
+        </div>
+      </div>
+    </div>`;
+}
+
+function readCashierCustomerDiscount(prefix) {
+  const discountType = document.getElementById(`${prefix}-discount-type`)?.value || 'none';
+  const discountValue = parseFloat(document.getElementById(`${prefix}-discount-value`)?.value || '0') || 0;
+  if (discountType === 'percentage' && discountValue > 100) {
+    toast('Percentage discount cannot exceed 100%', 'error');
+    return null;
+  }
+  return { discountType, discountValue };
+}
+
 function renderCashierCustomers() {
   const users = DB.getUsers().filter(u => u.role === 'customer').reverse();
   const container = document.getElementById('cashier-customers-list');
@@ -2203,6 +2345,7 @@ function renderCashierCustomers() {
       <div style="flex:1">
         <div style="font-weight:600;font-size:1rem;margin-bottom:4px">${u.name}</div>
         <div style="font-size:.8rem;color:var(--text3)"><i class="fas fa-envelope"></i> ${u.email}</div>
+        ${formatCustomerDiscount(u.restaurantDiscountType, u.restaurantDiscountValue) ? `<div style="font-size:.8rem;color:var(--yellow);margin-top:4px"><i class="fas fa-tag"></i> ${formatCustomerDiscount(u.restaurantDiscountType, u.restaurantDiscountValue)}</div>` : ''}
       </div>
       <div>
         <button class="btn-outline btn-sm" onclick="showEditCashierCustomer('${u.id}')" style="margin-right:6px"><i class="fas fa-pen"></i> Edit</button>
@@ -2211,9 +2354,10 @@ function renderCashierCustomers() {
 }
 
 function showAddCashierCustomer() {
+  const currentOrderName = document.getElementById('pos-customer')?.value.trim() || '';
   showModal('Add Customer', `
     <div class="form-group"><label>Full Name</label><div class="inp-wrap"><i class="fas fa-user"></i>
-      <input type="text" id="nc-name" placeholder="E.g. John Doe">
+      <input type="text" id="nc-name" value="${currentOrderName}" placeholder="E.g. John Doe">
     </div></div>
     <div class="form-group"><label>Email address</label><div class="inp-wrap"><i class="fas fa-envelope"></i>
       <input type="email" id="nc-email" placeholder="john@example.com">
@@ -2221,6 +2365,7 @@ function showAddCashierCustomer() {
     <div class="form-group"><label>Password</label><div class="inp-wrap"><i class="fas fa-lock"></i>
       <input type="password" id="nc-pass" placeholder="(min 6 characters)">
     </div></div>
+    ${cashierCustomerDiscountFields('nc')}
     <button class="btn-primary btn-full" style="margin-top:8px" onclick="saveCashierCustomer()">
       <i class="fas fa-plus"></i> Add Customer
     </button>
@@ -2231,11 +2376,18 @@ async function saveCashierCustomer() {
   const name = document.getElementById('nc-name').value.trim();
   const email = document.getElementById('nc-email').value.trim();
   const pass = document.getElementById('nc-pass').value;
+  const discount = readCashierCustomerDiscount('nc');
+  if (!discount) return;
   if (!name || !email || pass.length < 6) { toast('Fill all fields (min 6-char password)', 'error'); return; }
   try {
-    await API.post('/api/cashier/customers', { name, email, password: pass });
+    await API.post('/api/cashier/customers', { name, email, password: pass, ...discount });
     await DB.refreshCashier();
     closeModal();
+    const posCustomer = document.getElementById('pos-customer');
+    if (posCustomer) {
+      posCustomer.value = name;
+      renderPosCart();
+    }
     toast(`Customer "${name}" created!`, 'success');
     renderCashierCustomersDL();
     renderCashierCustomers();
@@ -2259,6 +2411,7 @@ function showEditCashierCustomer(id) {
     <div class="form-group"><label>New Password</label><div class="inp-wrap"><i class="fas fa-lock"></i>
       <input type="password" id="ecc-pass" placeholder="Leave blank to keep current">
     </div></div>
+    ${cashierCustomerDiscountFields('ecc', target.restaurantDiscountType || 'none', target.restaurantDiscountValue || 0)}
     <button class="btn-primary btn-full" style="margin-top:8px" onclick="saveEditCashierCustomer('${id}')">
       <i class="fas fa-save"></i> Save Changes
     </button>
@@ -2269,12 +2422,18 @@ async function saveEditCashierCustomer(id) {
   const name = document.getElementById('ecc-name').value.trim();
   const email = document.getElementById('ecc-email').value.trim();
   const pass = document.getElementById('ecc-pass').value;
+  const discount = readCashierCustomerDiscount('ecc');
+  if (!discount) return;
   if (!name || !email) { toast('Name and email are required', 'error'); return; }
   if (pass && pass.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
   try {
-    await API.put(`/api/cashier/customers/${id}`, { name, email, password: pass || null });
+    await API.put(`/api/cashier/customers/${id}`, { name, email, password: pass || null, ...discount });
     await DB.refreshCashier();
     closeModal();
+    const posCustomer = document.getElementById('pos-customer');
+    if (posCustomer && posCustomer.value.trim().toLowerCase() === name.toLowerCase()) {
+      renderPosCart();
+    }
     toast(`Customer updated: ${name} ✅`, 'success');
     renderCashierCustomersDL();
     renderCashierCustomers();
@@ -2683,8 +2842,8 @@ function showReceipt(id) {
   const html = `
     <div id="print-area" style="font-family:'Courier New',monospace;color:#111;background:#fff;padding:24px;border-radius:10px;max-width:440px;margin:0 auto;font-size:14px;line-height:1.5;border:1px solid #ece7dc;">
       <div style="text-align:center; margin-bottom:16px;">
-        <img src="${logoUrl}" alt="Punjabi Cafe Logo" style="height:130px; margin-bottom:12px; object-fit:contain;">
-        <h2 style="margin:0;font-size:24px;">Punjabi Cafe</h2>
+        <img src="${logoUrl}" alt="${DB.getCompanyName()} Logo" style="height:130px; margin-bottom:12px; object-fit:contain;">
+        <h2 style="margin:0;font-size:24px;">${DB.getCompanyName()}</h2>
         <div style="color:#555">Order Receipt</div>
         <div style="margin-top:10px;font-size:16px;letter-spacing:2px;"><strong>RECEIPT</strong></div>
       </div>
@@ -2715,7 +2874,7 @@ function showReceipt(id) {
       </table>
       <hr style="border-top:1px dashed #000; margin:10px 0;">
       <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>${currencySymbol}${parseFloat(o.subtotal).toFixed(2)}</span></div>
-      ${o.discount > 0 ? `<div style="display:flex; justify-content:space-between; color:#c0392b;"><span>Discount${o.couponCode ? ' (' + o.couponCode + ')' : ''}:</span><span>-${currencySymbol}${parseFloat(o.discount).toFixed(2)}</span></div>` : ''}
+      ${o.discount > 0 ? `<div style="display:flex; justify-content:space-between; color:#c0392b;"><span>${orderDiscountLabel(o)}:</span><span>-${currencySymbol}${parseFloat(o.discount).toFixed(2)}</span></div>` : ''}
       ${o.discount > 0 ? `<div style="display:flex; justify-content:space-between; font-weight:600;"><span>After Discount:</span><span>${currencySymbol}${afterDiscount.toFixed(2)}</span></div>` : ''}
       ${o.delivery > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Delivery Fee:</span><span>${currencySymbol}${parseFloat(o.delivery).toFixed(2)}</span></div>` : ''}
       <div style="display:flex; justify-content:space-between;"><span>Tax:</span><span>${currencySymbol}${parseFloat(o.tax).toFixed(2)}</span></div>
@@ -2725,7 +2884,7 @@ function showReceipt(id) {
         <div>Paid via: ${o.paymentMethod}</div>
         <div style="margin-top:4px; font-weight:bold;">*** ${o.paid ? 'PAID' : 'PAYMENT PENDING'} ***</div>
         <div style="margin-top:16px; font-style:italic;">Thank you for dining with us!</div>
-        <div style="margin-top:4px; font-weight:700;">Punjabi Cafe</div>
+        <div style="margin-top:4px; font-weight:700;">${DB.getCompanyName()}</div>
         <div style="margin-top:4px;">50A, Civic Centre, E Block Gulshan-e-Ravi, Lahore</div>
         <div style="margin-top:4px;">03000745672</div>
       </div>
