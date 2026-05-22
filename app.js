@@ -21,6 +21,8 @@ const state = {
   taxRate: 0.00
 };
 
+let pendingBackupImport = null;
+
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? `http://${window.location.hostname}:8080` : (window.location.protocol === 'file:' ? 'http://localhost:8080' : '');
 
 const API = {
@@ -119,6 +121,7 @@ const DB = {
     state.currency = DEFAULT_CURRENCY;
     state.taxRate = 0;
     custCoupon = null;
+    pendingBackupImport = null;
   },
 
   async init() {
@@ -238,6 +241,7 @@ function showModal(title, html) {
 
 function closeModal() {
   adminOrderEditState = null;
+  pendingBackupImport = null;
   document.getElementById('modal-overlay').classList.add('hidden');
 }
 
@@ -1137,9 +1141,9 @@ async function exportData() {
     a.download = `fastbite-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
-    toast('Data exported! \ud83d\udcbe', 'success');
+    toast('Backup file created', 'success');
   } catch (err) {
-    toast(err.message || 'Unable to export data', 'error');
+    toast(err.message || 'Unable to create backup', 'error');
   }
 }
 
@@ -1149,9 +1153,9 @@ function importData(input) {
   reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data.users || !data.items) { toast('Invalid backup file', 'error'); return; }
-      const safeJson = JSON.stringify(data).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      showModal('Confirm Import', `
+      if (!data.version || !Array.isArray(data.users) || !Array.isArray(data.items)) { toast('Invalid backup file', 'error'); return; }
+      pendingBackupImport = data;
+      showModal('Import Backup', `
         <div style="text-align:center;padding:8px 0">
           <div style="font-size:3rem;margin-bottom:16px">\ud83d\udcc2</div>
           <p style="font-size:1rem;font-weight:600;margin-bottom:8px">Import this backup?</p>
@@ -1159,8 +1163,8 @@ function importData(input) {
           <p style="color:var(--text2);font-size:.85rem;margin-bottom:20px">${data.users.length} users \u00b7 ${data.items.length} items \u00b7 ${(data.orders || []).length} orders</p>
           <p style="color:var(--red);font-size:.82rem;margin-bottom:20px">\u26a0\ufe0f This will overwrite all current data.</p>
           <div style="display:flex;gap:12px;justify-content:center">
-            <button class="btn-primary" style="min-width:160px" onclick="confirmImport('${safeJson}')">
-              <i class="fas fa-upload"></i> Yes, Import
+            <button class="btn-primary" style="min-width:160px" onclick="confirmImportBackup()">
+              <i class="fas fa-upload"></i> Import Backup
             </button>
             <button class="btn-outline" onclick="closeModal()"><i class="fas fa-arrow-left"></i> Cancel</button>
           </div>
@@ -1172,14 +1176,23 @@ function importData(input) {
   input.value = '';
 }
 
-async function confirmImport(jsonStr) {
+async function confirmImportBackup() {
+  if (!pendingBackupImport) {
+    toast('Select a backup file first', 'error');
+    return;
+  }
   try {
-    const data = JSON.parse(jsonStr);
-    await API.post('/api/admin/backup/import', data);
-    await DB.refreshAdmin();
+    await API.post('/api/admin/backup/import', pendingBackupImport);
+    pendingBackupImport = null;
     closeModal();
-    toast('Data imported! \u2705', 'success');
-    adminNav('settings');
+    toast('Backup imported', 'success');
+    try {
+      await DB.refreshForSession();
+      if (DB.getSession()?.role === 'admin') adminNav('settings');
+    } catch {
+      DB.reset();
+      showPage('page-auth');
+    }
   } catch (err) {
     toast(err.message || 'Import failed', 'error');
   }

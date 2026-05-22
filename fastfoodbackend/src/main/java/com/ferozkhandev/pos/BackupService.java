@@ -5,19 +5,27 @@ import com.ferozkhandev.pos.DomainEnums.DiscountType;
 import com.ferozkhandev.pos.DomainEnums.OrderStatus;
 import com.ferozkhandev.pos.DomainEnums.PaymentMethod;
 import com.ferozkhandev.pos.DomainEnums.Role;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class BackupService {
+
+    private static final String SNAPSHOT_VERSION = "2.1";
 
     private final UserAccountRepository userAccountRepository;
     private final MenuItemRepository menuItemRepository;
@@ -100,7 +108,7 @@ public class BackupService {
             ))
             .toList());
         return new BackupSnapshotResponse(
-            "2.0",
+            SNAPSHOT_VERSION,
             Instant.now(),
             users,
             items,
@@ -108,7 +116,8 @@ public class BackupService {
             feedbackEntryRepository.findAllByOrderByCreatedAtDesc().stream().map(apiMapper::toFeedback).toList(),
             couponRepository.findAllByOrderByCreatedAtDesc().stream().map(apiMapper::toCoupon).toList(),
             carts,
-            settingsService.getCurrency()
+            settingsService.getCurrency(),
+            settingsService.getTaxRate()
         );
     }
 
@@ -119,6 +128,7 @@ public class BackupService {
     }
 
     public ErrorResponse importSnapshot(BackupSnapshotResponse snapshot) {
+        validateSnapshot(snapshot);
         clearAllData();
         Map<String, UserAccount> usersById = new HashMap<>();
         snapshot.users().forEach(record -> {
@@ -233,21 +243,200 @@ public class BackupService {
         }
 
         settingsService.setCurrency(snapshot.currency() != null ? snapshot.currency() : SettingsService.DEFAULT_CURRENCY);
+        settingsService.setTaxRate(snapshot.taxRate() != null ? snapshot.taxRate() : new BigDecimal(SettingsService.DEFAULT_TAX_RATE));
         if (userAccountRepository.findByRoleOrderByCreatedAtDesc(Role.ADMIN).stream().noneMatch(UserAccount::isSuperAdmin)) {
             seederService.seedDefaults();
         }
         return new ErrorResponse("Data imported");
     }
 
+    private void validateSnapshot(BackupSnapshotResponse snapshot) {
+        if (snapshot == null
+            || !isSupportedVersion(snapshot.version())
+            || snapshot.users() == null
+            || snapshot.items() == null
+            || snapshot.orders() == null
+            || snapshot.feedback() == null
+            || snapshot.coupons() == null) {
+            throw invalidBackup();
+        }
+
+        Set<String> userIds = new HashSet<>();
+        snapshot.users().forEach(record -> {
+            require(record != null
+                && hasText(record.id())
+                && hasText(record.name())
+                && hasText(record.email())
+                && hasText(record.passwordHash())
+                && hasText(record.role()));
+            parseRole(record.role());
+            if (hasText(record.restaurantDiscountType())) {
+                parseDiscountType(record.restaurantDiscountType());
+            }
+            require(userIds.add(record.id()));
+        });
+
+        Set<String> itemIds = new HashSet<>();
+        snapshot.items().forEach(record -> {
+            require(record != null
+                && hasText(record.id())
+                && hasText(record.name())
+                && hasText(record.category())
+                && record.price() != null
+                && record.price().compareTo(BigDecimal.ZERO) >= 0
+                && record.discount() != null
+                && record.description() != null
+                && hasText(record.icon()));
+            validateImagePayload(record.imageBase64());
+            require(itemIds.add(record.id()));
+        });
+
+        Set<String> couponCodes = new HashSet<>();
+        snapshot.coupons().forEach(record -> {
+            require(record != null
+                && hasText(record.id())
+                && hasText(record.code())
+                && hasText(record.discountType())
+                && record.discountValue() != null
+                && record.minOrderAttr() != null
+                && hasText(record.status()));
+            parseDiscountType(record.discountType());
+            parseCouponStatus(record.status());
+            require(couponCodes.add(record.code()));
+        });
+
+        Set<String> orderIds = new HashSet<>();
+        snapshot.orders().forEach(record -> {
+            require(record != null
+                && hasText(record.id())
+                && hasText(record.customerName())
+                && record.items() != null
+                && record.subtotal() != null
+                && record.discount() != null
+                && record.delivery() != null
+                && record.tax() != null
+                && record.total() != null
+                && hasText(record.paymentMethod())
+                && hasText(record.status()));
+            require(!hasText(record.customerId()) || userIds.contains(record.customerId()));
+            require(!hasText(record.cashierId()) || userIds.contains(record.cashierId()));
+            parsePaymentMethod(record.paymentMethod());
+            parseOrderStatus(record.status());
+            require(orderIds.add(record.id()));
+            record.items().forEach(item -> require(item != null
+                && hasText(item.name())
+                && hasText(item.category())
+                && hasText(item.icon())
+                && item.price() != null
+                && item.qty() > 0));
+        });
+
+        snapshot.feedback().forEach(record -> {
+            require(record != null
+                && hasText(record.id())
+                && hasText(record.customerId())
+                && hasText(record.customerName())
+                && hasText(record.orderId())
+                && hasText(record.orderRef())
+                && record.rating() >= 1
+                && record.rating() <= 5);
+            require(userIds.contains(record.customerId()));
+            require(orderIds.contains(record.orderId()));
+        });
+
+        if (snapshot.carts() != null) {
+            require(snapshot.carts().carts() != null);
+            snapshot.carts().carts().forEach(record -> {
+                require(record != null && hasText(record.userId()) && userIds.contains(record.userId()) && record.items() != null);
+                require(!hasText(record.couponCode()) || couponCodes.contains(record.couponCode()));
+                record.items().forEach(item -> require(item != null
+                    && hasText(item.id())
+                    && itemIds.contains(item.id())
+                    && item.qty() > 0));
+            });
+        }
+    }
+
+    private boolean isSupportedVersion(String version) {
+        return "2.0".equals(version) || SNAPSHOT_VERSION.equals(version);
+    }
+
+    private void validateImagePayload(String dataUrl) {
+        if (!StringUtils.hasText(dataUrl)) {
+            return;
+        }
+        int dataIndex = dataUrl.indexOf("base64,");
+        require(dataIndex >= 0);
+        try {
+            Base64.getDecoder().decode(dataUrl.substring(dataIndex + "base64,".length()));
+        } catch (IllegalArgumentException ex) {
+            throw invalidBackup();
+        }
+    }
+
+    private Role parseRole(String value) {
+        try {
+            return Role.valueOf(value.toUpperCase());
+        } catch (RuntimeException ex) {
+            throw invalidBackup();
+        }
+    }
+
+    private DiscountType parseDiscountType(String value) {
+        try {
+            return DiscountType.valueOf(value.toUpperCase());
+        } catch (RuntimeException ex) {
+            throw invalidBackup();
+        }
+    }
+
+    private CouponStatus parseCouponStatus(String value) {
+        try {
+            return CouponStatus.valueOf(value.toUpperCase());
+        } catch (RuntimeException ex) {
+            throw invalidBackup();
+        }
+    }
+
+    private PaymentMethod parsePaymentMethod(String value) {
+        try {
+            return PaymentMethod.valueOf(value.toUpperCase());
+        } catch (RuntimeException ex) {
+            throw invalidBackup();
+        }
+    }
+
+    private OrderStatus parseOrderStatus(String value) {
+        try {
+            return OrderStatus.valueOf(value.toUpperCase());
+        } catch (RuntimeException ex) {
+            throw invalidBackup();
+        }
+    }
+
+    private boolean hasText(String value) {
+        return StringUtils.hasText(value);
+    }
+
+    private void require(boolean valid) {
+        if (!valid) {
+            throw invalidBackup();
+        }
+    }
+
+    private ApiException invalidBackup() {
+        return new ApiException(HttpStatus.BAD_REQUEST, "Invalid backup file.");
+    }
+
     private void clearAllData() {
-        refreshTokenRepository.deleteAll();
-        feedbackEntryRepository.deleteAll();
-        shopOrderRepository.deleteAll();
-        cartRepository.deleteAll();
-        couponRepository.deleteAll();
-        menuItemRepository.deleteAll();
-        appSettingRepository.deleteAll();
-        userAccountRepository.deleteAll();
+        refreshTokenRepository.deleteAllInBatch();
+        feedbackEntryRepository.deleteAllInBatch();
+        shopOrderRepository.deleteAllInBatch();
+        cartRepository.deleteAllInBatch();
+        couponRepository.deleteAllInBatch();
+        menuItemRepository.deleteAllInBatch();
+        appSettingRepository.deleteAllInBatch();
+        userAccountRepository.deleteAllInBatch();
         storageService.clearAll();
     }
 }

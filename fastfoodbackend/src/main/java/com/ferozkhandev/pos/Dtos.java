@@ -307,7 +307,8 @@ record BackupSnapshotResponse(
     List<FeedbackResponse> feedback,
     List<CouponResponse> coupons,
     CartBackupRecord carts,
-    String currency
+    String currency,
+    BigDecimal taxRate
 ) {
 }
 

@@ -302,7 +302,7 @@
         <div class="sec-header">
           <div>
             <h2>Settings</h2>
-            <p>Manage data backups and administrator accounts.</p>
+            <p>Manage database backups and administrator accounts.</p>
           </div>
         </div>
 
@@ -310,18 +310,17 @@
           <!-- Data Management -->
           <div class="settings-card">
             <h3><i class="fas fa-database"></i> Data Management</h3>
-            <p class="settings-desc">Your data is automatically saved in this browser. Export regularly for a permanent
-              backup file you can restore on any PC.</p>
+            <p class="settings-desc">Create a database backup file on this computer and import it later to restore the
+              app.</p>
             <div class="settings-actions">
-              <button class="btn-primary" onclick="exportData()"><i class="fas fa-download"></i> Export Data to
-                File</button>
+              <button class="btn-primary" onclick="exportData()"><i class="fas fa-download"></i> Backup Database</button>
               <button class="btn-outline" onclick="document.getElementById('import-file').click()"><i
-                  class="fas fa-upload"></i> Import Data from File</button>
+                  class="fas fa-upload"></i> Import Backup</button>
               <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
               <button class="btn-danger" onclick="clearAllData()"><i class="fas fa-trash"></i> Clear All Data</button>
             </div>
-            <div class="settings-note"><i class="fas fa-info-circle"></i> Data survives browser closes &amp; reboots.
-              Export to keep a portable backup.</div>
+            <div class="settings-note"><i class="fas fa-info-circle"></i> Import replaces the current database with the
+              selected backup file.</div>
           </div>
 
           <!-- Currency -->
