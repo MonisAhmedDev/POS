@@ -61,6 +61,8 @@ public class ApiMapper {
             MoneyUtils.money(order.getTax()),
             MoneyUtils.money(order.getTotal()),
             order.getCouponCode(),
+            order.getManualDiscountType() != null ? order.getManualDiscountType().name().toLowerCase() : null,
+            MoneyUtils.money(order.getManualDiscountValue() != null ? order.getManualDiscountValue() : MoneyUtils.ZERO),
             titleCase(order.getPaymentMethod().name()),
             order.getDeliveryName(),
             order.getPhone(),

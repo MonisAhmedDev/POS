@@ -14,6 +14,8 @@ public class BootstrapService {
     private final UserManagementService userManagementService;
     private final SettingsService settingsService;
     private final CartService cartService;
+    private final OrderHistoryService orderHistoryService;
+    private final CompanyConfigService companyConfigService;
 
     public AdminBootstrapResponse admin(UserAccount user) {
         return new AdminBootstrapResponse(
@@ -26,7 +28,11 @@ public class BootstrapService {
             userManagementService.listCashiers(),
             user.isSuperAdmin() ? catalogService.listCoupons() : java.util.List.of(),
             settingsService.getCurrency(),
-            settingsService.getTaxRate()
+            settingsService.getTaxRate(),
+            settingsService.getBrandLogoUrl(),
+            orderHistoryService.buildReport(),
+            companyConfigService.getCompanyName(),
+            "/api/company-logo"
         );
     }
 
@@ -39,7 +45,10 @@ public class BootstrapService {
             cartService.getCart(user),
             catalogService.listCoupons(),
             settingsService.getCurrency(),
-            settingsService.getTaxRate()
+            settingsService.getTaxRate(),
+            settingsService.getBrandLogoUrl(),
+            companyConfigService.getCompanyName(),
+            "/api/company-logo"
         );
     }
 
@@ -51,7 +60,10 @@ public class BootstrapService {
             userManagementService.listCashierCustomers(),
             catalogService.listCoupons(),
             settingsService.getCurrency(),
-            settingsService.getTaxRate()
+            settingsService.getTaxRate(),
+            settingsService.getBrandLogoUrl(),
+            companyConfigService.getCompanyName(),
+            "/api/company-logo"
         );
     }
 }

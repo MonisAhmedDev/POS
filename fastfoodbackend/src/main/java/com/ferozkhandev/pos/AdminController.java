@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -26,6 +28,7 @@ public class AdminController {
     private final SettingsService settingsService;
     private final CurrentUserService currentUserService;
     private final BootstrapService bootstrapService;
+    private final OrderHistoryService orderHistoryService;
 
     @GetMapping("/bootstrap")
     AdminBootstrapResponse bootstrap() {
@@ -35,6 +38,11 @@ public class AdminController {
     @GetMapping("/orders")
     List<OrderResponse> orders() {
         return orderService.listAllOrders();
+    }
+
+    @GetMapping("/orders/history")
+    OrderHistoryReportResponse orderHistory() {
+        return orderHistoryService.buildReport();
     }
 
     @PutMapping("/orders/{orderId}/status")
@@ -90,6 +98,21 @@ public class AdminController {
     @PutMapping("/settings/tax")
     java.math.BigDecimal updateTaxSettings(@Valid @RequestBody TaxUpdateRequest request) {
         return settingsService.setTaxRate(request.rate());
+    }
+
+    @GetMapping("/settings/logo")
+    LogoResponse brandLogo() {
+        return settingsService.getBrandLogoResponse();
+    }
+
+    @PutMapping("/settings/logo")
+    LogoResponse updateBrandLogo(@RequestParam MultipartFile image) {
+        return settingsService.setBrandLogo(image);
+    }
+
+    @DeleteMapping("/settings/logo")
+    LogoResponse clearBrandLogo() {
+        return settingsService.clearBrandLogo();
     }
 
     @GetMapping("/staff/admins")

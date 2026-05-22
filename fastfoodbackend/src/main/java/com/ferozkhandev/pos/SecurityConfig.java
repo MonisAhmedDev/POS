@@ -28,9 +28,10 @@ public class SecurityConfig {
             .cors(withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/index.html", "/style.css", "/app.js", "/uploads/**", "/favicon.ico", "/*.jpg", "/*.png", "/*.webp" ).permitAll()
+                .requestMatchers("/", "/index.html", "/style.css", "/app.js", "/uploads/**", "/favicon.ico", "/*.jpg", "/*.jpeg", "/*.png", "/*.webp", "/*.svg" ).permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/company-config", "/api/company-logo").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/menu-items").permitAll()
                 .requestMatchers("/api/menu-items/**").hasRole("ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

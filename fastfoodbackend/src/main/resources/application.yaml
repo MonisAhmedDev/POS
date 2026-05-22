@@ -41,3 +41,4 @@ app:
     name: ${APP_BOOTSTRAP_ADMIN_NAME:FastBite Admin}
     email: ${APP_BOOTSTRAP_ADMIN_EMAIL:admin@fastfood.com}
     password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:admin123}
+  company-config-dir: ${APP_COMPANY_CONFIG_DIR:}

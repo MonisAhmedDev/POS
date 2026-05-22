@@ -38,8 +38,10 @@ services:
       APP_BOOTSTRAP_ADMIN_NAME: FastBite Admin
       APP_BOOTSTRAP_ADMIN_EMAIL: admin@fastfood.com
       APP_BOOTSTRAP_ADMIN_PASSWORD: admin123
+      APP_COMPANY_CONFIG_DIR: /data/company-config
     volumes:
       - food_photos:/data/uploads
+      - ${USERPROFILE:-~}/POS:/data/company-config:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 15s
