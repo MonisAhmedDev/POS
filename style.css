@@ -763,6 +763,36 @@ textarea:focus {
   font-size: .9rem;
 }
 
+.dashboard-window-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  flex-wrap: wrap;
+}
+
+.dashboard-window-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text2);
+  font-family: 'Outfit', sans-serif;
+  font-size: .82rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.dashboard-window-btn:hover,
+.dashboard-window-btn.active {
+  background: var(--yellow);
+  color: var(--dark);
+}
+
 /* ===== STATS ===== */
 .stats-grid {
   display: grid;
@@ -878,6 +908,7 @@ textarea:focus {
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
   font-size: .85rem;
+  flex-wrap: wrap;
 }
 
 .top-row:last-child {
@@ -900,6 +931,13 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.top-sales-total {
+  color: var(--green);
+  font-size: .8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .top-count {
   background: var(--yglow);
   color: var(--yellow);
@@ -907,6 +945,121 @@ textarea:focus {
   border-radius: 20px;
   font-size: .78rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.discount-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(239, 68, 68, .24);
+  background: rgba(239, 68, 68, .1);
+  color: var(--red);
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: .76rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.discount-pill.muted {
+  border-color: var(--border);
+  background: var(--bg3);
+  color: var(--text3);
+  cursor: default;
+}
+
+.discount-drilldown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.discount-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.discount-summary>div {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 12px;
+}
+
+.discount-summary span {
+  display: block;
+  color: var(--text3);
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+
+.discount-summary strong {
+  color: var(--yellow);
+  font-size: 1rem;
+}
+
+.discount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 12px;
+  background: var(--surf);
+}
+
+.customer-link {
+  border: 0;
+  background: transparent;
+  color: var(--yellow);
+  font-family: 'Outfit', sans-serif;
+  font-size: .95rem;
+  font-weight: 800;
+  padding: 0;
+  cursor: pointer;
+}
+
+.customer-link:hover {
+  text-decoration: underline;
+}
+
+.discount-meta {
+  color: var(--text3);
+  font-size: .78rem;
+  margin-top: 3px;
+}
+
+.discount-amount {
+  color: var(--red);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.focus-pulse {
+  animation: focusPulse 2.4s ease;
+}
+
+@keyframes focusPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 196, 0, .55);
+    border-color: var(--yellow);
+  }
+
+  70% {
+    box-shadow: 0 0 0 14px rgba(245, 196, 0, 0);
+  }
+
+  100% {
+    box-shadow: none;
+  }
 }
 
 /* ===== BADGES ===== */
@@ -2079,8 +2232,14 @@ textarea:focus {
 }
 
 @media (max-width: 900px) {
+  .stats-grid,
+  .dash-bottom,
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .discount-summary {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -2394,6 +2553,12 @@ textarea:focus {
   color: var(--text3);
 }
 
+.pos-cart-discount {
+  font-size: .72rem;
+  color: var(--yellow);
+  margin-top: 2px;
+}
+
 .pos-cart-qty {
   display: flex;
   align-items: center;
@@ -2699,6 +2864,15 @@ textarea:focus {
 }
 
 @media (max-width: 768px) {
+  .discount-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .discount-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .history-bucket-card summary,
   .history-order-row {
     flex-direction: column;

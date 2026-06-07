@@ -35,6 +35,7 @@ const state = {
   customers: [],
   customerSummaries: [],
   orderHistory: emptyOrderHistoryReport(),
+  dashboardWindow: 'today',
   cart: { items: [], subtotal: 0, discount: 0, delivery: 0, tax: 0, total: 0, couponCode: null },
   brandLogoUrl: '',
   currency: DEFAULT_CURRENCY,
@@ -45,6 +46,12 @@ const state = {
 
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? `http://${window.location.hostname}:8080` : (window.location.protocol === 'file:' ? 'http://localhost:8080' : '');
 const APP_ASSET_BASE = API_BASE || (window.location.origin && window.location.origin !== 'null' ? window.location.origin : '');
+const DASHBOARD_WINDOWS = [
+  { key: 'today', label: 'Today', statSub: 'Today', itemSub: 'today' },
+  { key: 'week', label: 'Weekly', statSub: 'This week', itemSub: 'this week' },
+  { key: 'month', label: 'Monthly', statSub: 'This month', itemSub: 'this month' },
+  { key: 'all', label: 'All time', statSub: 'All time', itemSub: 'all time' }
+];
 
 const API = {
   async request(url, options = {}) {
@@ -192,6 +199,7 @@ const DB = {
     state.customers = [];
     state.customerSummaries = [];
     state.orderHistory = emptyOrderHistoryReport();
+    state.dashboardWindow = 'today';
     state.cart = emptyCart();
     state.brandLogoUrl = resolveInitialBrandLogoUrl();
     state.currency = DEFAULT_CURRENCY;
@@ -302,6 +310,60 @@ function fmtPrice(n) {
   const sym = DB.getCurrency().split('|')[1] || '$';
   return sym + parseFloat(n).toFixed(2);
 }
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+function jsString(value) {
+  return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+function getBusinessDayStart(reference = new Date(), cutoffHour = 4) {
+  const start = new Date(reference);
+  start.setHours(cutoffHour, 0, 0, 0);
+  if (reference < start) start.setDate(start.getDate() - 1);
+  return start;
+}
+function getDashboardWindowConfig(key = state.dashboardWindow) {
+  return DASHBOARD_WINDOWS.find(w => w.key === key) || DASHBOARD_WINDOWS[0];
+}
+function getDashboardWindowBounds(key = state.dashboardWindow, reference = new Date(), cutoffHour = 4) {
+  if (key === 'all') return null;
+  const businessStart = getBusinessDayStart(reference, cutoffHour);
+  if (key === 'today') return { start: businessStart, end: addDays(businessStart, 1) };
+
+  const businessDate = new Date(businessStart);
+  businessDate.setHours(0, 0, 0, 0);
+
+  if (key === 'week') {
+    const dayOffset = (businessDate.getDay() + 6) % 7;
+    const weekStart = addDays(businessDate, -dayOffset);
+    weekStart.setHours(cutoffHour, 0, 0, 0);
+    return { start: weekStart, end: addDays(weekStart, 7) };
+  }
+
+  if (key === 'month') {
+    const monthStart = new Date(businessDate.getFullYear(), businessDate.getMonth(), 1, cutoffHour, 0, 0, 0);
+    const monthEnd = new Date(businessDate.getFullYear(), businessDate.getMonth() + 1, 1, cutoffHour, 0, 0, 0);
+    return { start: monthStart, end: monthEnd };
+  }
+
+  return null;
+}
+function isOrderInWindow(order, bounds) {
+  if (!bounds) return true;
+  const createdAt = new Date(order?.createdAt);
+  return !Number.isNaN(createdAt.getTime()) && createdAt >= bounds.start && createdAt < bounds.end;
+}
 function isInCurrentBusinessDay(iso, reference = new Date(), cutoffHour = 4) {
   if (!iso) return false;
   const date = new Date(iso);
@@ -342,6 +404,25 @@ function calculateDirectDiscount(type, value, subtotal) {
   if (!type || amount <= 0 || subtotal <= 0) return 0;
   if (type === 'percentage') return subtotal * (amount / 100);
   return Math.min(subtotal, amount);
+}
+function calculateItemDiscount(item) {
+  const type = item?.discountType || item?.manualDiscountType || 'none';
+  const value = parseFloat(item?.discountValue ?? item?.manualDiscountValue ?? 0) || 0;
+  const unitPrice = parseFloat(item?.price || 0);
+  const qty = parseInt(item?.qty || 0, 10);
+  if (!type || type === 'none' || value <= 0 || unitPrice <= 0 || qty <= 0) return 0;
+  if (type === 'percentage') return unitPrice * qty * (value / 100);
+  return Math.min(unitPrice, value) * qty;
+}
+function orderItemDiscount(item) {
+  return Math.max(0, parseFloat(item?.discount ?? calculateItemDiscount(item) ?? 0) || 0);
+}
+function orderItemLineTotal(item) {
+  const fallback = (parseFloat(item?.price || 0) * parseInt(item?.qty || 0, 10)) - orderItemDiscount(item);
+  return Math.max(0, parseFloat(item?.lineTotal ?? fallback) || 0);
+}
+function orderItemDiscountTotal(order) {
+  return (order?.items || []).reduce((sum, item) => sum + orderItemDiscount(item), 0);
 }
 
 function toast(msg, type = 'info') {
@@ -474,25 +555,97 @@ function adminNav(sec) {
   if (sec === 'settings') renderSettings();
 }
 
+function setDashboardWindow(key) {
+  if (!DASHBOARD_WINDOWS.some(w => w.key === key)) return;
+  state.dashboardWindow = key;
+  renderDashboard();
+}
+
+function renderDashboardWindowControl() {
+  const control = document.getElementById('dashboard-window-control');
+  if (!control) return;
+  control.innerHTML = DASHBOARD_WINDOWS.map(w => `
+    <button type="button" class="dashboard-window-btn ${state.dashboardWindow === w.key ? 'active' : ''}" onclick="setDashboardWindow('${w.key}')">
+      ${w.label}
+    </button>
+  `).join('');
+}
+
+function resolveOrderCustomer(order) {
+  const customer = order?.customerId
+    ? DB.getUsers().find(u => u.role === 'customer' && u.id === order.customerId)
+    : findCustomerByName(order?.customerName);
+  return {
+    id: customer?.id || order?.customerId || null,
+    name: customer?.name || order?.customerName || 'Walk-in Customer',
+    email: customer?.email || ''
+  };
+}
+
+function dashboardCustomerCount(windowKey, windowOrders, users) {
+  if (windowKey === 'all') return users.filter(u => u.role === 'customer').length;
+  const customers = new Set();
+  windowOrders.forEach(order => {
+    const customer = resolveOrderCustomer(order);
+    const key = customer.id || (customer.name || '').trim().toLowerCase();
+    if (key) customers.add(key);
+  });
+  return customers.size;
+}
+
+function matchesOrderItem(menuItem, orderItem) {
+  return (menuItem.id && orderItem.id === menuItem.id) || (menuItem.name && orderItem.name === menuItem.name);
+}
+
+function collectItemDiscountDetails(menuItem, sourceOrders) {
+  const rows = [];
+  sourceOrders
+    .filter(order => order.status !== 'Cancelled')
+    .forEach(order => {
+      (order.items || []).forEach(item => {
+        const amount = orderItemDiscount(item);
+        if (!matchesOrderItem(menuItem, item) || amount <= 0) return;
+        const customer = resolveOrderCustomer(order);
+        rows.push({
+          order,
+          item,
+          amount,
+          customer,
+          qty: parseInt(item.qty || 0, 10) || 0,
+          label: posItemDiscountLabel(item.manualDiscountType, item.manualDiscountValue) || 'Item discount'
+        });
+      });
+    });
+  return rows;
+}
+
 function renderDashboard() {
-  const orders = DB.getOrders();
+  renderDashboardWindowControl();
+  const allOrders = DB.getOrders();
   const items = DB.getItems();
   const users = DB.getUsers();
-  const revenue = orders.reduce((s, o) => s + o.total, 0);
-  const customers = users.filter(u => u.role === 'customer').length;
+  const windowConfig = getDashboardWindowConfig();
+  const bounds = getDashboardWindowBounds(windowConfig.key);
+  const orders = allOrders.filter(o => isOrderInWindow(o, bounds));
+  const billableOrders = orders.filter(o => o.status !== 'Cancelled');
+  const revenue = billableOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0);
+  const customers = dashboardCustomerCount(windowConfig.key, billableOrders, users);
+  const customerSub = windowConfig.key === 'all' ? 'Registered' : `Served ${windowConfig.itemSub}`;
+  const itemSalesTitle = document.getElementById('dashboard-item-sales-title');
+  if (itemSalesTitle) itemSalesTitle.innerHTML = `<i class="fas fa-fire"></i> ${windowConfig.label} Item Sales`;
 
   // Stats
   const sg = document.getElementById('stats-grid');
   sg.innerHTML = `
-    <div class="stat-card"><div class="stat-icon"><i class="fas fa-shopping-bag"></i></div><div class="stat-label">Total Orders</div><div class="stat-value">${orders.length}</div><div class="stat-sub">All time</div></div>
-    <div class="stat-card"><div class="stat-icon"><i class="fas fa-dollar-sign"></i></div><div class="stat-label">Total Revenue</div><div class="stat-value">${fmtPrice(revenue)}</div><div class="stat-sub">All time</div></div>
+    <div class="stat-card"><div class="stat-icon"><i class="fas fa-shopping-bag"></i></div><div class="stat-label">Total Orders</div><div class="stat-value">${orders.length}</div><div class="stat-sub">${windowConfig.statSub}</div></div>
+    <div class="stat-card"><div class="stat-icon"><i class="fas fa-dollar-sign"></i></div><div class="stat-label">Total Revenue</div><div class="stat-value">${fmtPrice(revenue)}</div><div class="stat-sub">${windowConfig.statSub}</div></div>
     <div class="stat-card"><div class="stat-icon"><i class="fas fa-utensils"></i></div><div class="stat-label">Menu Items</div><div class="stat-value">${items.length}</div><div class="stat-sub">${items.filter(i => i.available).length} available</div></div>
-    <div class="stat-card"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-label">Customers</div><div class="stat-value">${customers}</div><div class="stat-sub">Registered</div></div>
+    <div class="stat-card"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-label">Customers</div><div class="stat-value">${customers}</div><div class="stat-sub">${customerSub}</div></div>
   `;
 
   // Recent orders
   const ro = document.getElementById('recent-orders');
-  if (!orders.length) { ro.innerHTML = '<div style="color:var(--text3);font-size:.85rem;padding:10px 0">No orders yet.</div>'; }
+  if (!orders.length) { ro.innerHTML = '<div style="color:var(--text3);font-size:.85rem;padding:10px 0">No orders in this window.</div>'; }
   else {
     ro.innerHTML = [...orders].reverse().slice(0, 6).map(o => `
       <div class="dash-row">
@@ -504,23 +657,105 @@ function renderDashboard() {
   }
 
   // Top items
-  const now = new Date();
   const counts = {};
+  const totals = {};
   orders
-    .filter(o => isInCurrentBusinessDay(o.createdAt, now) && o.status !== 'Cancelled')
+    .filter(o => o.status !== 'Cancelled')
     .forEach(o => o.items.forEach(i => {
-      counts[i.name] = (counts[i.name] || 0) + i.qty;
+      const key = i.id || i.name;
+      counts[key] = (counts[key] || 0) + i.qty;
+      totals[key] = (totals[key] || 0) + orderItemLineTotal(i);
     }));
   const sorted = items
-    .map((item, index) => ({ item, index, count: counts[item.name] || 0 }))
+    .map((item, index) => {
+      const details = collectItemDiscountDetails(item, orders);
+      return {
+        item,
+        index,
+        count: counts[item.id] || counts[item.name] || 0,
+        total: totals[item.id] || totals[item.name] || 0,
+        discountCount: details.length,
+        discountAmount: details.reduce((sum, detail) => sum + detail.amount, 0)
+      };
+    })
     .sort((a, b) => b.count - a.count || a.index - b.index);
   const ti = document.getElementById('top-items');
   if (!sorted.length) { ti.innerHTML = '<div style="color:var(--text3);font-size:.85rem;padding:10px 0">No menu items yet.</div>'; }
   else {
-    ti.innerHTML = sorted.map(({ item, count }) => {
-      return `<div class="top-row"><span class="top-icon">${item.icon || ''}</span><span class="top-name">${item.name}</span><span class="top-price">${fmtPrice(item.price)}</span><span class="top-count">${count} sold</span></div>`;
+    ti.innerHTML = sorted.map(({ item, count, total, discountCount, discountAmount }) => {
+      const discountButton = discountCount > 0
+        ? `<button type="button" class="discount-pill" onclick="showItemDiscounts('${jsString(item.id)}')"><i class="fas fa-tag"></i> ${discountCount} ${discountCount === 1 ? 'discount' : 'discounts'} (${fmtPrice(discountAmount)})</button>`
+        : '<span class="discount-pill muted"><i class="fas fa-tag"></i> No discounts</span>';
+      return `<div class="top-row"><span class="top-icon">${item.icon || ''}</span><span class="top-name">${escapeHtml(item.name)}</span><span class="top-price">${fmtPrice(effectiveMenuPrice(item))} each</span><span class="top-sales-total">${fmtPrice(total)} ${windowConfig.itemSub}</span>${discountButton}<span class="top-count">${count} sold</span></div>`;
     }).join('');
   }
+}
+
+function showItemDiscounts(itemId) {
+  const item = DB.getItems().find(i => i.id === itemId);
+  if (!item) return;
+  const windowConfig = getDashboardWindowConfig();
+  const bounds = getDashboardWindowBounds(windowConfig.key);
+  const rows = collectItemDiscountDetails(item, DB.getOrders().filter(order => isOrderInWindow(order, bounds)));
+  const totalAmount = rows.reduce((sum, row) => sum + row.amount, 0);
+  const totalQty = rows.reduce((sum, row) => sum + row.qty, 0);
+
+  showModal(`${item.name} Discounts`, `
+    <div class="discount-drilldown">
+      <div class="discount-summary">
+        <div><span>Window</span><strong>${escapeHtml(windowConfig.label)}</strong></div>
+        <div><span>Discounts</span><strong>${rows.length}</strong></div>
+        <div><span>Items</span><strong>${totalQty}</strong></div>
+        <div><span>Value</span><strong>${fmtPrice(totalAmount)}</strong></div>
+      </div>
+      ${rows.length ? rows.map(row => {
+        const customerAction = row.customer.id
+          ? `<button type="button" class="customer-link" onclick="goToCustomerHistory('${jsString(row.customer.id)}','${jsString(row.order.id)}')">${escapeHtml(row.customer.name)}</button>`
+          : `<button type="button" class="customer-link" onclick="goToAdminOrder('${jsString(row.order.id)}')">${escapeHtml(row.customer.name)}</button>`;
+        return `
+          <div class="discount-row">
+            <div>
+              <div class="discount-customer">${customerAction}</div>
+              <div class="discount-meta">#${row.order.id.slice(-6).toUpperCase()} &middot; ${fmtDate(row.order.createdAt)} &middot; qty ${row.qty}</div>
+              <div class="discount-meta">${escapeHtml(row.label)}</div>
+            </div>
+            <div class="discount-amount">-${fmtPrice(row.amount)}</div>
+          </div>
+        `;
+      }).join('') : '<div class="empty-state compact"><i class="fas fa-tag"></i><p>No item discounts in this window.</p></div>'}
+    </div>
+  `);
+}
+
+function goToCustomerHistory(customerId, orderId) {
+  closeModal();
+  adminNav('customers');
+  setTimeout(() => {
+    const card = document.getElementById(`customer-card-${customerId}`);
+    const order = document.getElementById(`customer-order-${orderId}`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      card.classList.add('focus-pulse');
+      setTimeout(() => card.classList.remove('focus-pulse'), 2400);
+    }
+    if (order) {
+      order.classList.add('focus-pulse');
+      setTimeout(() => order.classList.remove('focus-pulse'), 2400);
+    }
+  }, 80);
+}
+
+function goToAdminOrder(orderId) {
+  closeModal();
+  adminNav('orders');
+  setTimeout(() => {
+    const row = document.getElementById(`admin-order-row-${orderId}`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('focus-pulse');
+      setTimeout(() => row.classList.remove('focus-pulse'), 2400);
+    }
+  }, 80);
 }
 
 function renderAdminMenu() {
@@ -660,7 +895,7 @@ function renderOrders() {
     return;
   }
   tbody.innerHTML = orders.map(o => `
-    <tr>
+    <tr id="admin-order-row-${o.id}">
       <td class="order-id">#${o.id.slice(-6).toUpperCase()}</td>
       <td>${o.customerName}</td>
       <td class="order-items-cell">${o.items.map(i => `${i.name} ×${i.qty}`).join(', ')}</td>
@@ -969,7 +1204,9 @@ function showAdminEditOrder(orderId) {
         name: item.name,
         icon: item.icon || menuItem.icon || '🍽️',
         category: item.category || menuItem.category || '',
-        qty: item.qty
+        qty: item.qty,
+        discountType: item.manualDiscountType || 'none',
+        discountValue: parseFloat(item.manualDiscountValue || 0) || 0
       };
     })
   };
@@ -1011,6 +1248,14 @@ function adminOrderEditorHtml() {
             <div style="flex:1">
               <div style="font-weight:600">${item.icon} ${item.name}</div>
               <div style="font-size:.78rem;color:var(--text3)">${item.category}</div>
+              <div style="display:grid;grid-template-columns:110px 120px;gap:8px;margin-top:8px">
+                <select style="font-size:.78rem;padding:6px 8px" onchange="adminEditOrderDiscountType('${item.id}', this.value)">
+                  <option value="none" ${(item.discountType || 'none') === 'none' ? 'selected' : ''}>No discount</option>
+                  <option value="percentage" ${item.discountType === 'percentage' ? 'selected' : ''}>Percent</option>
+                  <option value="fixed" ${item.discountType === 'fixed' ? 'selected' : ''}>Amount each</option>
+                </select>
+                <input type="number" min="0" step="0.01" value="${parseFloat(item.discountValue || 0) || ''}" placeholder="Value" style="font-size:.78rem;padding:6px 8px" onchange="adminEditOrderDiscountValue('${item.id}', this.value)">
+              </div>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
               <button class="btn-icon" onclick="adminEditOrderQty('${item.id}', -1)"><i class="fas fa-minus"></i></button>
@@ -1056,7 +1301,7 @@ function adminEditOrderAddItem(itemId) {
     }
     existing.qty += 1;
   } else {
-    adminOrderEditState.items.push({ ...menuItem, qty: 1 });
+    adminOrderEditState.items.push({ ...menuItem, qty: 1, discountType: 'none', discountValue: 0 });
   }
   rerenderAdminOrderEditor();
 }
@@ -1075,9 +1320,29 @@ function adminEditOrderQty(itemId, delta) {
   rerenderAdminOrderEditor();
 }
 
+function adminEditOrderDiscountType(itemId, type) {
+  if (!adminOrderEditState) return;
+  const item = adminOrderEditState.items.find(entry => entry.id === itemId);
+  if (!item) return;
+  item.discountType = type || 'none';
+  if (item.discountType === 'none') item.discountValue = 0;
+  rerenderAdminOrderEditor();
+}
+
+function adminEditOrderDiscountValue(itemId, value) {
+  if (!adminOrderEditState) return;
+  const item = adminOrderEditState.items.find(entry => entry.id === itemId);
+  if (!item) return;
+  item.discountValue = parseFloat(value || '0') || 0;
+}
+
 async function saveAdminEditedOrder() {
   if (!adminOrderEditState || !adminOrderEditState.items.length) {
     toast('Add at least one item to the order', 'error');
+    return;
+  }
+  if (adminOrderEditState.items.some(item => item.discountType === 'percentage' && (parseFloat(item.discountValue || 0) || 0) > 100)) {
+    toast('Percentage discount cannot exceed 100%', 'error');
     return;
   }
   const paymentMethod = document.getElementById('admin-order-payment').value;
@@ -1087,7 +1352,12 @@ async function saveAdminEditedOrder() {
       customerName: adminOrderEditState.customerName,
       couponCode,
       paymentMethod,
-      items: adminOrderEditState.items.map(item => ({ id: item.id, qty: item.qty }))
+      items: adminOrderEditState.items.map(item => ({
+        id: item.id,
+        qty: item.qty,
+        discountType: item.discountType && item.discountType !== 'none' ? item.discountType : null,
+        discountValue: item.discountType && item.discountType !== 'none' ? (parseFloat(item.discountValue || 0) || 0) : 0
+      }))
     });
     await DB.refreshAdmin();
     closeModal();
@@ -1130,7 +1400,7 @@ function renderCustomers() {
     const avgRating = uFb.length ? (uFb.reduce((s, f) => s + f.rating, 0) / uFb.length).toFixed(1) : null;
     const customerDiscount = formatCustomerDiscount(u.restaurantDiscountType, u.restaurantDiscountValue);
     return `
-    <div class="cust-detail-card">
+    <div class="cust-detail-card" id="customer-card-${u.id}">
       <div class="cust-detail-hdr">
         <div class="cust-detail-avatar">${u.name[0].toUpperCase()}</div>
         <div class="cust-detail-info">
@@ -1156,7 +1426,7 @@ function renderCustomers() {
       <div class="cust-orders-tbl">
         <div class="cust-tbl-hdr"><span>Order ID</span><span>Items</span><span>Total</span><span>Payment</span><span>Status</span><span>Date</span></div>
         ${[...uOrders].reverse().map(o => `
-        <div class="cust-tbl-row">
+        <div class="cust-tbl-row" id="customer-order-${o.id}">
           <span class="order-id">#${o.id.slice(-6).toUpperCase()}</span>
           <span style="color:var(--text2);font-size:.82rem">${o.items.map(i => `${i.icon} ${i.name} \u00d7${i.qty}`).join(', ')}</span>
           <span style="color:var(--yellow);font-weight:700">${fmtPrice(o.total)}</span>
@@ -1877,7 +2147,7 @@ async function confirmDeleteCashier(id) {
 let posCat = '';
 let posCart = [];
 let posCoupon = null;
-let posManualDiscount = { type: 'none', value: 0 };
+let posDiscountTargetId = null;
 let posEditOrderId = null;
 
 async function loadCashier(refresh = true) {
@@ -1888,7 +2158,7 @@ async function loadCashier(refresh = true) {
   showPage('page-cashier');
   posCart = [];
   posCoupon = null;
-  posManualDiscount = { type: 'none', value: 0 };
+  posDiscountTargetId = null;
   posEditOrderId = null;
   buildPosCatTabs();
   renderPosMenu();
@@ -2053,7 +2323,7 @@ function posAddToCart(itemId) {
     }
     exists.qty++;
   } else {
-    posCart.push({ ...item, price, qty: 1 });
+    posCart.push({ ...item, price, qty: 1, discountType: 'none', discountValue: 0 });
   }
   renderPosCart();
   // brief flash on button
@@ -2085,70 +2355,85 @@ function applyPosCoupon() {
 
 function removePosCoupon() { posCoupon = null; renderPosCart(); }
 
-function syncPosManualDiscountFromInputs() {
+function syncPosItemDiscountFromInputs() {
+  const itemInput = document.getElementById('pos-discount-item');
   const typeInput = document.getElementById('pos-discount-type');
   const valueInput = document.getElementById('pos-discount-value');
-  if (typeInput) posManualDiscount.type = typeInput.value || 'none';
-  if (valueInput) posManualDiscount.value = parseFloat(valueInput.value || '0') || 0;
-  if (posManualDiscount.type === 'none') posManualDiscount.value = 0;
+  if (itemInput) posDiscountTargetId = itemInput.value || null;
+  const target = posCart.find(item => item.id === posDiscountTargetId);
+  if (!target) return;
+  target.discountType = typeInput?.value || 'none';
+  target.discountValue = parseFloat(valueInput?.value || '0') || 0;
+  if (target.discountType === 'none') target.discountValue = 0;
 }
 
-function updatePosManualDiscount() {
-  syncPosManualDiscountFromInputs();
+function selectPosDiscountItem() {
+  const itemInput = document.getElementById('pos-discount-item');
+  posDiscountTargetId = itemInput?.value || null;
+  renderPosCart(true);
+}
+
+function updatePosItemDiscount() {
+  syncPosItemDiscountFromInputs();
   renderPosCart();
 }
 
-function posManualDiscountLabel(type, value) {
+function posItemDiscountLabel(type, value) {
   const amount = parseFloat(value || 0);
   if (!type || type === 'none' || amount <= 0) return '';
-  return type === 'percentage' ? `${amount}% cashier discount` : `${fmtPrice(amount)} cashier discount`;
+  return type === 'percentage' ? `${amount}% item discount` : `${fmtPrice(amount)} off each`;
 }
 
 function orderDiscountLabel(order) {
   const parts = [];
   if (order?.couponCode) parts.push(order.couponCode);
-  if (order?.manualDiscountType && parseFloat(order?.manualDiscountValue || 0) > 0) parts.push('cashier');
+  if (orderItemDiscountTotal(order) > 0 || (order?.manualDiscountType && parseFloat(order?.manualDiscountValue || 0) > 0)) parts.push('item');
   return parts.length ? `Discount (${parts.join(' + ')})` : 'Restaurant Discount';
 }
 
-function renderPosCart() {
+function renderPosCart(skipInputSync = false) {
   const itemsEl = document.getElementById('pos-order-items');
   const footerEl = document.getElementById('pos-order-footer');
   const currentPayment = document.getElementById('pos-payment')?.value || 'Cash';
   const currentPromoValue = document.getElementById('pos-promo')?.value || '';
-  syncPosManualDiscountFromInputs();
-  const currentDiscountType = posManualDiscount.type || 'none';
-  const currentDiscountValue = parseFloat(posManualDiscount.value || 0) || 0;
+  if (!skipInputSync) syncPosItemDiscountFromInputs();
   if (!posCart.length) {
     itemsEl.innerHTML = '<div class="pos-empty-order"><i class="fas fa-shopping-bag"></i><p>Add items from the menu</p></div>';
     footerEl.innerHTML = '';
     posCoupon = null;
-    posManualDiscount = { type: 'none', value: 0 };
+    posDiscountTargetId = null;
     return;
   }
+  if (!posCart.some(item => item.id === posDiscountTargetId)) posDiscountTargetId = posCart[0]?.id || null;
+  const selectedDiscountItem = posCart.find(item => item.id === posDiscountTargetId);
+  const currentDiscountType = selectedDiscountItem?.discountType || 'none';
+  const currentDiscountValue = parseFloat(selectedDiscountItem?.discountValue || 0) || 0;
   itemsEl.innerHTML = posCart.map(c => `
     <div class="pos-cart-row">
       <span class="pos-cart-icon">${c.icon}</span>
       <div class="pos-cart-info">
         <div class="pos-cart-name">${c.name}</div>
         <div class="pos-cart-price">${fmtPrice(c.price)} each</div>
+        ${calculateItemDiscount(c) > 0 ? `<div class="pos-cart-discount">${posItemDiscountLabel(c.discountType, c.discountValue)} -${fmtPrice(calculateItemDiscount(c))}</div>` : ''}
       </div>
       <div class="pos-cart-qty">
         <button onclick="posUpdateQty('${c.id}',-1)"><i class="fas fa-minus"></i></button>
         <span>${c.qty}</span>
         <button onclick="posUpdateQty('${c.id}',1)"><i class="fas fa-plus"></i></button>
       </div>
-      <div class="pos-cart-total">${fmtPrice(c.price * c.qty)}</div>
+      <div class="pos-cart-total">${fmtPrice((c.price * c.qty) - calculateItemDiscount(c))}</div>
     </div>`).join('');
 
   const subtotal = posCart.reduce((s, c) => s + c.price * c.qty, 0);
+  const itemDiscount = posCart.reduce((s, c) => s + calculateItemDiscount(c), 0);
+  const discountableSubtotal = Math.max(0, subtotal - itemDiscount);
 
   let discount = 0;
   if (posCoupon) {
     let validSubtotal = 0;
     posCart.forEach(c => {
       if (!posCoupon.applicableCategory || c.category === posCoupon.applicableCategory) {
-        validSubtotal += c.price * c.qty;
+        validSubtotal += Math.max(0, (c.price * c.qty) - calculateItemDiscount(c));
       }
     });
     if (validSubtotal >= (posCoupon.minOrderAttr || 0) && validSubtotal > 0) {
@@ -2164,10 +2449,8 @@ function renderPosCart() {
   }
 
   const customer = findCustomerByName(document.getElementById('pos-customer')?.value || '');
-  const customerDiscount = calculateDirectDiscount(customer?.restaurantDiscountType, customer?.restaurantDiscountValue, subtotal);
-  const manualDiscountRaw = calculateDirectDiscount(currentDiscountType, currentDiscountValue, subtotal);
-  const manualDiscount = Math.min(Math.max(0, subtotal - discount - customerDiscount), manualDiscountRaw);
-  const totalDiscount = Math.min(subtotal, discount + customerDiscount + manualDiscount);
+  const customerDiscount = calculateDirectDiscount(customer?.restaurantDiscountType, customer?.restaurantDiscountValue, discountableSubtotal);
+  const totalDiscount = Math.min(subtotal, itemDiscount + discount + customerDiscount);
 
   const delivery = 0;
   const taxRate = state.taxRate || 0;
@@ -2177,9 +2460,9 @@ function renderPosCart() {
   footerEl.innerHTML = `
     <div class="pos-totals">
       <div class="pos-total-row"><span>Subtotal</span><span>${fmtPrice(subtotal)}</span></div>
+      ${itemDiscount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>Item discounts</span><span>-${fmtPrice(itemDiscount)}</span></div>` : ''}
       ${discount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>Discount (${posCoupon.code})</span><span>-${fmtPrice(discount)} <i class="fas fa-times" style="cursor:pointer;margin-left:4px" onclick="removePosCoupon()"></i></span></div>` : ''}
       ${customerDiscount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>${formatCustomerDiscount(customer.restaurantDiscountType, customer.restaurantDiscountValue)}</span><span>-${fmtPrice(customerDiscount)}</span></div>` : ''}
-      ${manualDiscount > 0 ? `<div class="pos-total-row" style="color:var(--yellow)"><span>${posManualDiscountLabel(currentDiscountType, currentDiscountValue)}</span><span>-${fmtPrice(manualDiscount)}</span></div>` : ''}
       <div class="pos-total-row"><span>${formatTaxLabel(taxRate)}</span><span>${fmtPrice(tax)}</span></div>
       <div class="pos-total-row pos-grand-total"><span>TOTAL</span><span>${fmtPrice(total)}</span></div>
     </div>
@@ -2190,21 +2473,29 @@ function renderPosCart() {
         <button class="btn-outline btn-sm" onclick="applyPosCoupon()">Apply</button>
       </div>` : ''}
 
-    <div class="pos-pay-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    <div class="pos-pay-row" style="display:grid;grid-template-columns:1.2fr .9fr .9fr;gap:8px;margin-bottom:8px">
       <div>
-        <label style="font-size:.8rem;color:var(--text3)">Bill Discount</label>
+        <label style="font-size:.8rem;color:var(--text3)">Discount Item</label>
+        <div class="inp-wrap" style="margin:6px 0 0"><i class="fas fa-utensils"></i>
+          <select id="pos-discount-item" onchange="selectPosDiscountItem()">
+            ${posCart.map(c => `<option value="${c.id}" ${c.id === posDiscountTargetId ? 'selected' : ''}>${c.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:.8rem;color:var(--text3)">Item Discount</label>
         <div class="inp-wrap" style="margin:6px 0 0"><i class="fas fa-tag"></i>
-          <select id="pos-discount-type" onchange="updatePosManualDiscount()">
+          <select id="pos-discount-type" onchange="updatePosItemDiscount()">
             <option value="none" ${currentDiscountType === 'none' ? 'selected' : ''}>None</option>
             <option value="percentage" ${currentDiscountType === 'percentage' ? 'selected' : ''}>Percent</option>
-            <option value="fixed" ${currentDiscountType === 'fixed' ? 'selected' : ''}>Amount</option>
+            <option value="fixed" ${currentDiscountType === 'fixed' ? 'selected' : ''}>Amount each</option>
           </select>
         </div>
       </div>
       <div>
         <label style="font-size:.8rem;color:var(--text3)">Value</label>
         <div class="inp-wrap" style="margin:6px 0 0"><i class="fas fa-coins"></i>
-          <input type="number" id="pos-discount-value" value="${currentDiscountValue || ''}" min="0" step="0.01" ${currentDiscountType === 'none' ? 'disabled' : ''} oninput="updatePosManualDiscount()">
+          <input type="number" id="pos-discount-value" value="${currentDiscountValue || ''}" min="0" step="0.01" ${currentDiscountType === 'none' ? 'disabled' : ''} oninput="updatePosItemDiscount()">
         </div>
       </div>
     </div>
@@ -2227,10 +2518,8 @@ async function placePosOrder() {
   if (!posCart.length) { toast('Cart is empty', 'error'); return; }
   const customerName = document.getElementById('pos-customer').value.trim() || 'Walk-in Customer';
   const payment = document.getElementById('pos-payment')?.value || 'Cash';
-  syncPosManualDiscountFromInputs();
-  const manualDiscountType = posManualDiscount.type !== 'none' ? posManualDiscount.type : null;
-  const manualDiscountValue = manualDiscountType ? (parseFloat(posManualDiscount.value || 0) || 0) : 0;
-  if (manualDiscountType === 'percentage' && manualDiscountValue > 100) {
+  syncPosItemDiscountFromInputs();
+  if (posCart.some(item => item.discountType === 'percentage' && (parseFloat(item.discountValue || 0) || 0) > 100)) {
     toast('Percentage discount cannot exceed 100%', 'error');
     return;
   }
@@ -2239,10 +2528,15 @@ async function placePosOrder() {
     const body = {
       customerName,
       couponCode: posCoupon ? posCoupon.code : null,
-      discountType: manualDiscountType,
-      discountValue: manualDiscountValue,
+      discountType: null,
+      discountValue: 0,
       paymentMethod: payment,
-      items: posCart.map(c => ({ id: c.id, qty: c.qty }))
+      items: posCart.map(c => ({
+        id: c.id,
+        qty: c.qty,
+        discountType: c.discountType && c.discountType !== 'none' ? c.discountType : null,
+        discountValue: c.discountType && c.discountType !== 'none' ? (parseFloat(c.discountValue || 0) || 0) : 0
+      }))
     };
     let resultOrder;
     if (editId) {
@@ -2253,7 +2547,7 @@ async function placePosOrder() {
     await DB.refreshCashier();
     posCart = [];
     posCoupon = null;
-    posManualDiscount = { type: 'none', value: 0 };
+    posDiscountTargetId = null;
     posEditOrderId = null;
     document.getElementById('pos-customer').value = '';
     renderPosCart();
@@ -2270,7 +2564,7 @@ async function placePosOrder() {
 function clearPosCart() {
   posCart = [];
   posCoupon = null;
-  posManualDiscount = { type: 'none', value: 0 };
+  posDiscountTargetId = null;
   posEditOrderId = null;
   renderPosCart();
 }
@@ -2283,11 +2577,13 @@ function editPosOrder(orderId) {
     const menuItem = DB.getItems().find(m => m.id === i.id) || {};
     return { ...menuItem, id: i.id, name: i.name, price: parseFloat(i.price), icon: i.icon || '🍽️', category: i.category, qty: i.qty };
   });
+  posCart.forEach((item, index) => {
+    const source = o.items[index] || {};
+    item.discountType = source.manualDiscountType || 'none';
+    item.discountValue = parseFloat(source.manualDiscountValue || 0) || 0;
+  });
   posCoupon = o.couponCode ? DB.getCoupons().find(c => c.code === o.couponCode && c.status === 'Active') || null : null;
-  posManualDiscount = {
-    type: o.manualDiscountType || 'none',
-    value: parseFloat(o.manualDiscountValue || 0) || 0
-  };
+  posDiscountTargetId = posCart.find(item => item.discountType && item.discountType !== 'none')?.id || posCart[0]?.id || null;
   posEditOrderId = orderId;
   document.getElementById('pos-customer').value = o.customerName || '';
   posNav('order');
@@ -2868,8 +3164,9 @@ function showReceipt(id) {
             <td style="padding:4px 0;">${i.name}</td>
             <td style="text-align:center;padding:4px 0;">x${i.qty}</td>
             <td style="text-align:right;padding:4px 0;">${currencySymbol}${parseFloat(i.price).toFixed(2)}</td>
-            <td style="text-align:right;padding:4px 0;">${currencySymbol}${parseFloat(i.price * i.qty).toFixed(2)}</td>
+            <td style="text-align:right;padding:4px 0;">${currencySymbol}${orderItemLineTotal(i).toFixed(2)}</td>
           </tr>
+          ${orderItemDiscount(i) > 0 ? `<tr><td colspan="3" style="padding:0 0 4px 12px;color:#c0392b;font-size:12px;">Item discount included: ${posItemDiscountLabel(i.manualDiscountType, i.manualDiscountValue)}</td><td style="text-align:right;padding:0 0 4px;color:#c0392b;font-size:12px;">-${currencySymbol}${orderItemDiscount(i).toFixed(2)}</td></tr>` : ''}
         `).join('')}
       </table>
       <hr style="border-top:1px dashed #000; margin:10px 0;">

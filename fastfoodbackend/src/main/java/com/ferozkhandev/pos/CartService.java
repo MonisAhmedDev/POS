@@ -109,7 +109,8 @@ public class CartService {
             .map(item -> new PricingLineItem(
                 item.getMenuItem().getCategory(),
                 MoneyUtils.subtractDiscount(item.getMenuItem().getPrice(), item.getMenuItem().getDiscount()),
-                item.getQuantity()
+                item.getQuantity(),
+                MoneyUtils.ZERO
             ))
             .toList();
     }

@@ -54,6 +54,10 @@ record OrderItemResponse(
     String category,
     String icon,
     BigDecimal price,
+    BigDecimal discount,
+    String manualDiscountType,
+    BigDecimal manualDiscountValue,
+    BigDecimal lineTotal,
     int qty
 ) {
 }
@@ -167,8 +171,13 @@ record CheckoutRequest(
 
 record PosOrderItemRequest(
     @NotBlank String id,
-    @Min(1) @Max(ValidationRules.MAX_ITEM_QUANTITY) int qty
+    @Min(1) @Max(ValidationRules.MAX_ITEM_QUANTITY) int qty,
+    String discountType,
+    BigDecimal discountValue
 ) {
+    PosOrderItemRequest(String id, int qty) {
+        this(id, qty, null, null);
+    }
 }
 
 record PosOrderRequest(

@@ -70,21 +70,19 @@ public class OrderService {
         }
         Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
         UserAccount customer = findCustomerByName(request.customerName());
-        List<PricingLineItem> pricingItems = items.stream()
-            .map(item -> new PricingLineItem(item.menuItem().getCategory(), effectivePrice(item.menuItem()), item.quantity()))
-            .toList();
+        List<PricingLineItem> pricingItems = pricingItems(items);
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        ManualDiscount manualDiscount = resolveManualDiscount(request.discountType(), request.discountValue(), null, MoneyUtils.ZERO);
         CartTotals totals = pricingService.calculate(
             pricingItems,
             coupon,
             customer,
-            manualDiscount.type(),
-            manualDiscount.value(),
+            null,
+            MoneyUtils.ZERO,
             false
         );
+        ManualDiscount manualDiscount = summarizeItemDiscounts(items);
         String customerName = StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Walk-in Customer";
 
         ShopOrder order = new ShopOrder();
@@ -106,7 +104,7 @@ public class OrderService {
         order.setAddress("In-store");
         order.setStatus(OrderStatus.PREPARING);
         order.setItems(new ArrayList<>());
-        items.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
+        items.forEach(item -> order.getItems().add(toOrderItem(order, item)));
         return apiMapper.toOrder(shopOrderRepository.save(order));
     }
 
@@ -122,26 +120,19 @@ public class OrderService {
         }
         Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
         UserAccount customer = order.getCustomer() != null ? order.getCustomer() : findCustomerByName(request.customerName());
-        List<PricingLineItem> pricingItems = newItems.stream()
-            .map(item -> new PricingLineItem(item.menuItem().getCategory(), effectivePrice(item.menuItem()), item.quantity()))
-            .toList();
+        List<PricingLineItem> pricingItems = pricingItems(newItems);
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        ManualDiscount manualDiscount = resolveManualDiscount(
-            request.discountType(),
-            request.discountValue(),
-            order.getManualDiscountType(),
-            order.getManualDiscountValue()
-        );
         CartTotals totals = pricingService.calculate(
             pricingItems,
             coupon,
             customer,
-            manualDiscount.type(),
-            manualDiscount.value(),
+            null,
+            MoneyUtils.ZERO,
             includesDelivery(order)
         );
+        ManualDiscount manualDiscount = summarizeItemDiscounts(newItems);
         order.setCustomer(customer);
         if (customer != null) {
             order.setCustomerName(customer.getName());
@@ -165,7 +156,7 @@ public class OrderService {
         order.setManualDiscountValue(manualDiscount.value());
         order.setPaymentMethod(parsePaymentMethod(request.paymentMethod()));
         order.getItems().clear();
-        newItems.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
+        newItems.forEach(item -> order.getItems().add(toOrderItem(order, item)));
         return apiMapper.toOrder(shopOrderRepository.save(order));
     }
 
@@ -209,26 +200,19 @@ public class OrderService {
         if (newItems.isEmpty()) throw new ApiException(HttpStatus.BAD_REQUEST, "Cart is empty.");
         Coupon coupon = StringUtils.hasText(request.couponCode()) ? catalogService.findActiveCoupon(request.couponCode()) : null;
         UserAccount customer = findCustomerByName(request.customerName());
-        List<PricingLineItem> pricingItems = newItems.stream()
-            .map(item -> new PricingLineItem(item.menuItem().getCategory(), effectivePrice(item.menuItem()), item.quantity()))
-            .toList();
+        List<PricingLineItem> pricingItems = pricingItems(newItems);
         if (coupon != null) {
             pricingService.validateCoupon(pricingItems, coupon);
         }
-        ManualDiscount manualDiscount = resolveManualDiscount(
-            request.discountType(),
-            request.discountValue(),
-            order.getManualDiscountType(),
-            order.getManualDiscountValue()
-        );
         CartTotals totals = pricingService.calculate(
             pricingItems,
             coupon,
             customer,
-            manualDiscount.type(),
-            manualDiscount.value(),
+            null,
+            MoneyUtils.ZERO,
             false
         );
+        ManualDiscount manualDiscount = summarizeItemDiscounts(newItems);
         order.setCustomer(customer);
         order.setCustomerName(customer != null ? customer.getName() : (StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Walk-in Customer"));
         order.setSubtotal(totals.subtotal());
@@ -244,7 +228,7 @@ public class OrderService {
         order.setCashierName(cashier.getName());
         order.setDeliveryName(order.getCustomerName());
         order.getItems().clear();
-        newItems.forEach(item -> order.getItems().add(toOrderItem(order, item.menuItem(), item.quantity())));
+        newItems.forEach(item -> order.getItems().add(toOrderItem(order, item)));
         return apiMapper.toOrder(shopOrderRepository.save(order));
     }
 
@@ -271,6 +255,11 @@ public class OrderService {
     }
 
     private OrderItem toOrderItem(ShopOrder order, MenuItem menuItem, int quantity) {
+        return toOrderItem(order, new MenuItemQuantity(menuItem, quantity, new ManualDiscount(null, MoneyUtils.ZERO)));
+    }
+
+    private OrderItem toOrderItem(ShopOrder order, MenuItemQuantity menuItemQuantity) {
+        MenuItem menuItem = menuItemQuantity.menuItem();
         OrderItem item = new OrderItem();
         item.setOrder(order);
         item.setMenuItemId(menuItem.getId());
@@ -278,7 +267,10 @@ public class OrderService {
         item.setCategory(menuItem.getCategory());
         item.setIcon(menuItem.getIcon());
         item.setPrice(effectivePrice(menuItem));
-        item.setQuantity(quantity);
+        item.setQuantity(menuItemQuantity.quantity());
+        item.setManualDiscountType(menuItemQuantity.discount().type());
+        item.setManualDiscountValue(menuItemQuantity.discount().value());
+        item.setDiscount(calculateItemDiscount(item.getPrice(), menuItemQuantity.quantity(), menuItemQuantity.discount()));
         return item;
     }
 
@@ -286,9 +278,51 @@ public class OrderService {
         return requestItems.stream()
             .map(item -> {
                 ValidationRules.requireQuantity(item.qty());
-                return new MenuItemQuantity(catalogService.getMenuItem(item.id()), item.qty());
+                return new MenuItemQuantity(
+                    catalogService.getMenuItem(item.id()),
+                    item.qty(),
+                    resolveManualDiscount(item.discountType(), item.discountValue(), null, MoneyUtils.ZERO)
+                );
             })
             .toList();
+    }
+
+    private List<PricingLineItem> pricingItems(List<MenuItemQuantity> items) {
+        return items.stream()
+            .map(item -> {
+                BigDecimal price = effectivePrice(item.menuItem());
+                return new PricingLineItem(
+                    item.menuItem().getCategory(),
+                    price,
+                    item.quantity(),
+                    calculateItemDiscount(price, item.quantity(), item.discount())
+                );
+            })
+            .toList();
+    }
+
+    private BigDecimal calculateItemDiscount(BigDecimal unitPrice, int quantity, ManualDiscount discount) {
+        if (discount.type() == null || discount.value() == null || discount.value().compareTo(MoneyUtils.ZERO) <= 0) {
+            return MoneyUtils.ZERO;
+        }
+        BigDecimal lineSubtotal = MoneyUtils.multiply(unitPrice, quantity);
+        BigDecimal amount = discount.type() == DiscountType.PERCENTAGE
+            ? lineSubtotal.multiply(discount.value()).divide(new BigDecimal("100"))
+            : unitPrice.min(discount.value()).multiply(BigDecimal.valueOf(quantity));
+        return MoneyUtils.money(amount.min(lineSubtotal));
+    }
+
+    private ManualDiscount summarizeItemDiscounts(List<MenuItemQuantity> items) {
+        DiscountType firstType = null;
+        BigDecimal total = MoneyUtils.ZERO;
+        for (MenuItemQuantity item : items) {
+            BigDecimal discount = calculateItemDiscount(effectivePrice(item.menuItem()), item.quantity(), item.discount());
+            if (discount.compareTo(MoneyUtils.ZERO) > 0 && firstType == null) {
+                firstType = item.discount().type();
+            }
+            total = total.add(discount);
+        }
+        return new ManualDiscount(firstType, MoneyUtils.money(total));
     }
 
     private UserAccount findCustomerByName(String customerName) {
@@ -359,7 +393,7 @@ public class OrderService {
     }
 }
 
-record MenuItemQuantity(MenuItem menuItem, int quantity) {
+record MenuItemQuantity(MenuItem menuItem, int quantity, ManualDiscount discount) {
 }
 
 record ManualDiscount(DiscountType type, BigDecimal value) {

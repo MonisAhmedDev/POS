@@ -32,10 +32,14 @@ public class PricingService {
         BigDecimal subtotal = items.stream()
             .map(item -> MoneyUtils.multiply(item.price(), item.quantity()))
             .reduce(MoneyUtils.ZERO, BigDecimal::add);
-        BigDecimal customerDiscount = calculateCustomerDiscount(subtotal, customer);
+        BigDecimal itemDiscount = items.stream()
+            .map(PricingLineItem::discount)
+            .reduce(MoneyUtils.ZERO, BigDecimal::add);
+        BigDecimal discountableSubtotal = subtotal.subtract(itemDiscount).max(MoneyUtils.ZERO);
+        BigDecimal customerDiscount = calculateCustomerDiscount(discountableSubtotal, customer);
         BigDecimal couponDiscount = calculateDiscount(items, coupon, false);
-        BigDecimal manualDiscount = calculateDirectDiscount(subtotal, manualDiscountType, manualDiscountValue);
-        BigDecimal discount = MoneyUtils.money(customerDiscount.add(couponDiscount).add(manualDiscount).min(subtotal));
+        BigDecimal manualDiscount = calculateDirectDiscount(discountableSubtotal, manualDiscountType, manualDiscountValue);
+        BigDecimal discount = MoneyUtils.money(itemDiscount.add(customerDiscount).add(couponDiscount).add(manualDiscount).min(subtotal));
         BigDecimal delivery = includeDelivery && subtotal.compareTo(MoneyUtils.ZERO) > 0 ? MoneyUtils.DELIVERY_FEE : MoneyUtils.ZERO;
         BigDecimal taxable = subtotal.subtract(discount).max(MoneyUtils.ZERO);
         BigDecimal tax = MoneyUtils.money(taxable.multiply(settingsService.getTaxRate()));
@@ -83,7 +87,7 @@ public class PricingService {
         }
         BigDecimal eligibleSubtotal = items.stream()
             .filter(item -> !StringUtils.hasText(coupon.getApplicableCategory()) || coupon.getApplicableCategory().equals(item.category()))
-            .map(item -> MoneyUtils.multiply(item.price(), item.quantity()))
+            .map(PricingLineItem::lineTotal)
             .reduce(MoneyUtils.ZERO, BigDecimal::add);
         if (eligibleSubtotal.compareTo(coupon.getMinOrderAmount()) < 0 || eligibleSubtotal.compareTo(MoneyUtils.ZERO) <= 0) {
             if (strict) {
@@ -101,6 +105,14 @@ public class PricingService {
 record PricingLineItem(
     String category,
     BigDecimal price,
-    int quantity
+    int quantity,
+    BigDecimal discount
 ) {
+    PricingLineItem(String category, BigDecimal price, int quantity) {
+        this(category, price, quantity, MoneyUtils.ZERO);
+    }
+
+    BigDecimal lineTotal() {
+        return MoneyUtils.multiply(price, quantity).subtract(discount != null ? discount : MoneyUtils.ZERO).max(MoneyUtils.ZERO);
+    }
 }

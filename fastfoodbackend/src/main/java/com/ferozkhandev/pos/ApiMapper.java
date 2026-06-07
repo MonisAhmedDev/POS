@@ -74,12 +74,18 @@ public class ApiMapper {
     }
 
     public OrderItemResponse toOrderItem(OrderItem item) {
+        BigDecimal discount = MoneyUtils.money(item.getDiscount() != null ? item.getDiscount() : MoneyUtils.ZERO);
+        BigDecimal lineSubtotal = MoneyUtils.multiply(item.getPrice(), item.getQuantity());
         return new OrderItemResponse(
             item.getMenuItemId(),
             item.getName(),
             item.getCategory(),
             item.getIcon(),
             MoneyUtils.money(item.getPrice()),
+            discount,
+            item.getManualDiscountType() != null ? item.getManualDiscountType().name().toLowerCase() : null,
+            MoneyUtils.money(item.getManualDiscountValue() != null ? item.getManualDiscountValue() : MoneyUtils.ZERO),
+            MoneyUtils.money(lineSubtotal.subtract(discount).max(MoneyUtils.ZERO)),
             item.getQuantity()
         );
     }

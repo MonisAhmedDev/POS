@@ -202,6 +202,13 @@ public class BackupService {
                 item.setCategory(itemRecord.category());
                 item.setIcon(itemRecord.icon());
                 item.setPrice(itemRecord.price());
+                item.setDiscount(itemRecord.discount() != null ? itemRecord.discount() : java.math.BigDecimal.ZERO);
+                item.setManualDiscountType(itemRecord.manualDiscountType() != null
+                    ? DiscountType.valueOf(itemRecord.manualDiscountType().toUpperCase())
+                    : null);
+                item.setManualDiscountValue(itemRecord.manualDiscountValue() != null
+                    ? itemRecord.manualDiscountValue()
+                    : java.math.BigDecimal.ZERO);
                 item.setQuantity(itemRecord.qty());
                 return item;
             }).toList()));

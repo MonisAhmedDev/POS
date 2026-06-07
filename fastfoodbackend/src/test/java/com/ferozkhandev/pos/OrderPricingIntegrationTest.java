@@ -133,10 +133,10 @@ class OrderPricingIntegrationTest {
         OrderResponse order = orderService.createPosOrder(cashier, new PosOrderRequest(
             "Walk-in Customer",
             null,
-            "fixed",
-            new BigDecimal("5.00"),
+            null,
+            null,
             "Cash",
-            List.of(new PosOrderItemRequest(platter.getId(), 1))
+            List.of(new PosOrderItemRequest(platter.getId(), 1, "fixed", new BigDecimal("5.00")))
         ));
 
         assertThat(order.subtotal()).isEqualByComparingTo("50.00");
@@ -148,10 +148,10 @@ class OrderPricingIntegrationTest {
         OrderResponse updated = orderService.updatePosOrder(cashier, order.id(), new PosOrderRequest(
             "Walk-in Customer",
             null,
-            "percentage",
-            new BigDecimal("10.00"),
+            null,
+            null,
             "Card",
-            List.of(new PosOrderItemRequest(platter.getId(), 2))
+            List.of(new PosOrderItemRequest(platter.getId(), 2, "percentage", new BigDecimal("10.00")))
         ));
 
         assertThat(updated.subtotal()).isEqualByComparingTo("100.00");
@@ -159,6 +159,39 @@ class OrderPricingIntegrationTest {
         assertThat(updated.manualDiscountType()).isEqualTo("percentage");
         assertThat(updated.manualDiscountValue()).isEqualByComparingTo("10.00");
         assertThat(updated.total()).isEqualByComparingTo("90.00");
+    }
+
+    @Test
+    void cashierManualDiscountsApplyToSpecificItemsOnly() {
+        UserAccount cashier = saveUser("Item Discount Cashier", "item-discount@example.com", Role.CASHIER);
+        MenuItem burger = saveMenuItem("Stack Burger", "Burgers", "10.00", "0.00");
+        MenuItem pizza = saveMenuItem("Plain Pizza", "Pizzas", "20.00", "0.00");
+
+        OrderResponse order = orderService.createPosOrder(cashier, new PosOrderRequest(
+            "Walk-in Customer",
+            null,
+            null,
+            null,
+            "Cash",
+            List.of(
+                new PosOrderItemRequest(burger.getId(), 2, "fixed", new BigDecimal("5.00")),
+                new PosOrderItemRequest(pizza.getId(), 1)
+            )
+        ));
+
+        assertThat(order.subtotal()).isEqualByComparingTo("40.00");
+        assertThat(order.discount()).isEqualByComparingTo("10.00");
+        assertThat(order.total()).isEqualByComparingTo("30.00");
+        assertThat(order.items()).filteredOn(item -> item.id().equals(burger.getId())).singleElement().satisfies(item -> {
+            assertThat(item.discount()).isEqualByComparingTo("10.00");
+            assertThat(item.lineTotal()).isEqualByComparingTo("10.00");
+            assertThat(item.manualDiscountType()).isEqualTo("fixed");
+            assertThat(item.manualDiscountValue()).isEqualByComparingTo("5.00");
+        });
+        assertThat(order.items()).filteredOn(item -> item.id().equals(pizza.getId())).singleElement().satisfies(item -> {
+            assertThat(item.discount()).isEqualByComparingTo("0.00");
+            assertThat(item.lineTotal()).isEqualByComparingTo("20.00");
+        });
     }
 
     private UserAccount saveUser(String name, String email, Role role) {
